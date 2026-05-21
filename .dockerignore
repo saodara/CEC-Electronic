@@ -1,0 +1,14 @@
+.git
+.gitignore
+node_modules
+vendor
+public/build
+public/hot
+.env
+.env.*
+!.env.example
+storage/logs/*.log
+storage/framework/cache
+storage/framework/sessions
+storage/framework/views
+*.log

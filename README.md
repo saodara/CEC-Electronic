@@ -2,6 +2,54 @@
 
 Laravel website for CEC Electronic computer store. It includes storefront, product catalog, brands, cart, checkout, customer login/register, admin panel, suppliers, delivery, and order management.
 
+## Quick Start with Docker
+
+The easiest way to run this project. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+1. Clone the project:
+
+```bash
+git clone <repo-url>
+cd CEC-Electronic
+```
+
+2. Start everything:
+
+```bash
+docker compose up -d
+```
+
+First boot takes a few minutes — it installs PHP and JS dependencies, runs migrations, and seeds the database automatically.
+
+3. Open the app:
+
+```
+http://localhost:8080
+```
+
+Admin panel:
+
+```
+http://localhost:8080/admin/login
+```
+
+Use the `ADMIN_EMAIL` and `ADMIN_PASSWORD` from your `.env` file (auto-created from `.env.example` on first boot).
+
+**Stop the app:**
+
+```bash
+docker compose down
+```
+
+**Reset the database** (wipe all data and re-seed):
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+---
+
 ## Requirements
 
 - PHP 8.2 or newer
