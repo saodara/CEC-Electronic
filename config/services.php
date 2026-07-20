@@ -36,8 +36,11 @@ return [
     ],
 
     'bakong' => [
-        'deeplink' => env('BAKONG_DEEPLINK'),
+        'relay_url' => env('BAKONG_RELAY_URL'),
+        'account_id' => env('BAKONG_ACCOUNT_ID'),
+        'token' => env('BAKONG_RELAY_TOKEN'),
         'merchant_name' => env('BAKONG_MERCHANT_NAME', 'CEC Electronic'),
+        'merchant_city' => env('BAKONG_MERCHANT_CITY', 'Phnom Penh'),
     ],
 
 ];

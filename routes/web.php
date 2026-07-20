@@ -32,6 +32,9 @@ Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout.c
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/success/{order}', [CheckoutController::class, 'success'])->name('checkout.success');
 Route::get('/checkout/payment-status/{order}', [CheckoutController::class, 'paymentStatus'])->name('checkout.payment-status');
+Route::post('/webhooks/bakong', [CheckoutController::class, 'webhook'])
+    ->name('bakong.webhook')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
 
 Route::get('/login', [CustomerAuthController::class, 'login'])->name('customer.login');
 Route::post('/login', [CustomerAuthController::class, 'authenticate'])->name('customer.login.store');
