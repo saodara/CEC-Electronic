@@ -4,11 +4,36 @@ namespace App\Services;
 
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 
 class CartService
 {
+    /**
+     * Reassign a guest session's cart items to a newly authenticated user,
+     * combining quantities where the user already has the same product.
+     */
+    public function mergeGuestCartIntoUser(string $sessionId, User $user): void
+    {
+        CartItem::query()
+            ->where('session_id', $sessionId)
+            ->get()
+            ->each(function (CartItem $guestItem) use ($user) {
+                $userItem = CartItem::query()
+                    ->where('user_id', $user->id)
+                    ->where('product_id', $guestItem->product_id)
+                    ->first();
+
+                if ($userItem) {
+                    $userItem->increment('quantity', $guestItem->quantity);
+                    $guestItem->delete();
+                } else {
+                    $guestItem->update(['user_id' => $user->id, 'session_id' => null]);
+                }
+            });
+    }
+
     public function items(Request $request): Collection
     {
         return CartItem::query()

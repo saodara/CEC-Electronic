@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\CartService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +14,10 @@ use Illuminate\View\View;
 
 class AuthController extends Controller
 {
+    public function __construct(private CartService $cartService)
+    {
+    }
+
     public function login(): View
     {
         return view('account.auth.login');
@@ -36,7 +41,9 @@ class AuthController extends Controller
                 ->onlyInput('email');
         }
 
+        $sessionId = $request->session()->getId();
         $request->session()->regenerate();
+        $this->cartService->mergeGuestCartIntoUser($sessionId, $request->user());
 
         return redirect()->intended(route('account.dashboard'));
     }
@@ -57,7 +64,9 @@ class AuthController extends Controller
             ->update(['user_id' => $user->id]);
 
         Auth::login($user);
+        $sessionId = $request->session()->getId();
         $request->session()->regenerate();
+        $this->cartService->mergeGuestCartIntoUser($sessionId, $user);
 
         return redirect()->intended(route('account.dashboard'))->with('status', 'Account created.');
     }

@@ -97,6 +97,12 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'options' => extension_loaded('pdo_pgsql') ? array_filter([
+                // Reuse the TCP/TLS connection across requests within a worker
+                // instead of re-handshaking with the DB on every request. Matters
+                // a lot when the DB is geographically far from the app server.
+                PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', true),
+            ]) : [],
         ],
 
         'sqlsrv' => [

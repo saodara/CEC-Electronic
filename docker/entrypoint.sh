@@ -36,14 +36,14 @@ php artisan storage:link --force 2>/dev/null || true
 chown -R www-data:www-data "$WORKDIR/storage" "$WORKDIR/bootstrap/cache" 2>/dev/null || true
 chmod -R 775 "$WORKDIR/storage" "$WORKDIR/bootstrap/cache" 2>/dev/null || true
 
-# Wait for MySQL
-echo "Waiting for MySQL..."
+# Wait for the database
+echo "Waiting for database..."
 until php -r "
 try {
     new PDO(
-        'mysql:host=${DB_HOST:-mysql};port=${DB_PORT:-3306};dbname=${DB_DATABASE:-cec_ecommerce}',
-        '${DB_USERNAME:-cec_user}',
-        '${DB_PASSWORD:-secret}'
+        'pgsql:host=${DB_HOST};port=${DB_PORT:-5432};dbname=${DB_DATABASE:-neondb};sslmode=${DB_SSLMODE:-require}',
+        '${DB_USERNAME}',
+        '${DB_PASSWORD}'
     );
     echo 'ok';
 } catch (Exception \$e) {
@@ -52,7 +52,7 @@ try {
 " 2>/dev/null | grep -q ok; do
     sleep 2
 done
-echo "MySQL is ready."
+echo "Database is ready."
 
 # Run migrations
 echo "Running migrations..."

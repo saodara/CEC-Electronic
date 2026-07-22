@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProductController extends Controller
@@ -80,7 +81,7 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): RedirectResponse
     {
-        $data = $this->validatedData($request);
+        $data = $this->validatedData($request, $product);
         $data['slug'] = $product->name === $data['name']
             ? $product->slug
             : $this->uniqueSlug($data['name'], $product->id);
@@ -98,7 +99,7 @@ class ProductController extends Controller
         return redirect()->route('admin.products.index')->with('status', 'Product deleted.');
     }
 
-    private function validatedData(Request $request): array
+    private function validatedData(Request $request, ?Product $product = null): array
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -109,7 +110,7 @@ class ProductController extends Controller
             'compare_at_price' => ['nullable', 'integer', 'min:0'],
             'cost_price' => ['nullable', 'integer', 'min:0'],
             'stock_quantity' => ['nullable', 'integer', 'min:0'],
-            'sku' => ['nullable', 'string', 'max:120'],
+            'sku' => ['nullable', 'string', 'max:120', Rule::unique('products', 'sku')->ignore($product?->id)],
             'is_active' => ['nullable', 'boolean'],
             'is_featured' => ['nullable', 'boolean'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],

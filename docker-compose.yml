@@ -5,36 +5,20 @@ services:
       - "8080:80"
     volumes:
       - .:/var/www/html
-    depends_on:
-      mysql:
-        condition: service_healthy
+    # The default DNS (host router) intermittently fails to resolve external
+    # hosts like the Neon DB endpoint, hanging for ~30s before erroring.
+    # Pin to reliable public resolvers to avoid that stall.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
-      DB_CONNECTION: mysql
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_DATABASE: cec_ecommerce
-      DB_USERNAME: cec_user
-      DB_PASSWORD: secret
-      SESSION_DRIVER: database
-      CACHE_STORE: database
+      DB_CONNECTION: pgsql
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-neondb}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSLMODE: ${DB_SSLMODE:-require}
+      SESSION_DRIVER: file
+      CACHE_STORE: file
       QUEUE_CONNECTION: database
-
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootsecret
-      MYSQL_DATABASE: cec_ecommerce
-      MYSQL_USER: cec_user
-      MYSQL_PASSWORD: secret
-    volumes:
-      - mysql_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootsecret"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-volumes:
-  mysql_data:

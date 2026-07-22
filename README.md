@@ -2,6 +2,48 @@
 
 Laravel website for CEC Electronic computer store. It includes storefront, product catalog, brands, cart, checkout, customer login/register, admin panel, suppliers, delivery, and order management.
 
+## About the Project
+
+CEC Electronic is a full e-commerce platform for a computer/electronics retailer, covering both the customer-facing storefront and the internal admin back office in a single Laravel app.
+
+**Storefront**
+- Home page, category browsing, brand pages, and product detail pages
+- Product search
+- Shopping cart (add, update quantity, remove)
+- Checkout with delivery zone selection and **Bakong / KHQR** payment
+- Customer registration/login and an account area for order history
+
+**Admin panel**
+- Products and categories management
+- Order management (view, update status)
+- Customer directory (lookup by phone)
+- Supplier and purchase order management
+- Delivery zones and delivery providers management
+- Session-based admin authentication, separate from customer accounts
+
+## Tech Stack
+
+- **Backend:** PHP 8.3, Laravel 13
+- **Frontend:** Blade templates, Tailwind CSS 4, Vite
+- **Database:** MySQL / MariaDB
+- **Payment:** Bakong / KHQR (Cambodia)
+- **Dev tooling:** Docker Compose, Laravel Pint, PHPUnit
+- **Optional integration:** Supabase JS client (`@supabase/supabase-js`, `@supabase/ssr`)
+
+## Project Structure
+
+```
+app/Http/Controllers/
+├── Storefront/    Home, catalog/search, cart, checkout
+├── Customer/      Customer auth, account/orders
+├── Admin/         Products, categories, orders, customers,
+│                  suppliers, delivery zones/providers, admin auth
+app/Models/        Product, Category, CartItem, Order, OrderItem,
+                   Supplier, PurchaseOrder(Item), DeliveryZone,
+                   DeliveryProvider, Shipment, CustomerAddress, User
+routes/web.php     Storefront, customer, and admin routes
+```
+
 ## Quick Start with Docker
 
 The easiest way to run this project. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
@@ -304,17 +346,52 @@ npm install
 npm run build
 ```
 
-## Database Control
+## Database Schema
 
-All main system data is stored in MySQL:
+All data is stored in MySQL/MariaDB. Prices and monetary amounts are stored as unsigned integers (smallest currency unit, no decimals). Tables are created by the migrations in `database/migrations/`.
 
-- Admin and customer accounts: `users`
-- Customer carts: `cart_items`
-- Products and categories: `products`, `categories`
-- Checkout orders: `orders`, `order_items`
-- Delivery setup: `delivery_zones`, `delivery_providers`, `shipments`
-- Suppliers and purchase records: supplier tables
-- Login sessions and cache: `sessions`, `cache`
+### Accounts & Access
+
+- **`users`** — shared table for both customers and admins. Columns: `name`, `email` (unique), `email_verified_at`, `password`, `remember_token`, `is_admin` (boolean flag that grants access to `/admin/*`, protected by `EnsureAdminSession` middleware).
+- **`customer_addresses`** — saved shipping addresses per customer. Belongs to `users`. Columns: `label`, `recipient_name`, `phone`, `address_line_1/2`, `city`, `province`, `postal_code`, `country` (defaults `Cambodia`), `is_default`.
+- **`sessions`**, **`cache`**, **`jobs`** — Laravel's session/cache/queue tables (used since `SESSION_DRIVER=database`).
+
+### Catalog
+
+- **`categories`** — self-referencing (`parent_id`) for subcategories. Columns: `name`, `slug` (unique), `description`, `image`, `is_active`, `sort_order`.
+- **`products`** — columns: `category_id` (FK, nullable), `supplier_id` (FK, nullable), `name`, `slug` (unique), `sku` (unique, nullable), `description`, `image`, `images` (JSON gallery), `specifications` (JSON key/value), `price`, `compare_at_price`, `cost_price`, `stock_quantity`, `is_active`, `is_featured`, `category` (legacy free-text label kept for backward compatibility).
+
+### Cart & Checkout
+
+- **`cart_items`** — one row per product in a cart. Linked to a logged-in customer via `user_id`, or to a guest via `session_id`; unique per `(user_id, product_id)` and `(session_id, product_id)`. Columns: `quantity`, `unit_price`.
+- **`orders`** — columns: `order_number` (unique), `user_id` (FK, nullable for guest checkout), `customer_name`, `customer_email`, `customer_phone`, `status` (e.g. `pending`), `payment_status` (e.g. `unpaid`), `payment_method`, `shipping_method`, `subtotal`, `shipping_total`, `discount_total`, `grand_total`, `shipping_address` (JSON snapshot), `notes`, `placed_at`.
+  - Delivery: `delivery_zone_id`, `delivery_provider_id`, `tracking_number`, `shipped_at`, `delivered_at`.
+  - Payment tracking: `payment_confirmed_at`, `admin_payment_seen_at`.
+  - Bakong/KHQR: `bakong_session_id`, `bakong_checkout_url`, `bakong_qr_string`, `bakong_qr_md5`.
+- **`order_items`** — line items belonging to an `order`. Snapshots `product_name` and `sku` at time of purchase (independent of later product edits). Columns: `product_id` (FK, nullable), `quantity`, `unit_price`, `line_total`.
+
+### Suppliers & Purchasing
+
+- **`suppliers`** — columns: `name`, `company_name`, `email`, `phone`, `website`, `address`, `contact_person`, `payment_terms`, `is_active`, `notes`.
+- **`purchase_orders`** — a supplier order used to restock inventory. Columns: `po_number` (unique), `supplier_id` (FK), `status` (e.g. `draft`), `subtotal`, `grand_total`, `expected_date`, `received_date`, `notes`.
+- **`purchase_order_items`** — line items belonging to a `purchase_order`. Columns: `product_id` (FK), `quantity`, `unit_cost`, `line_total`.
+
+### Delivery & Shipping
+
+- **`delivery_zones`** — pricing/coverage areas. Columns: `name`, `city`, `province`, `delivery_fee`, `free_delivery_minimum`, `estimated_days`, `is_active`.
+- **`delivery_providers`** — courier/partner directory. Columns: `name`, `phone`, `email`, `tracking_url`, `base_fee`, `is_active`, `notes`.
+- **`shipments`** — one shipment per `order`, optionally tied to a `delivery_provider`. Columns: `tracking_number`, `status` (e.g. `pending`), `delivery_fee`, `picked_up_at`, `delivered_at`, `notes`.
+
+### Quick Reference
+
+| Concern | Tables |
+| --- | --- |
+| Accounts & access | `users`, `customer_addresses`, `sessions` |
+| Catalog | `categories`, `products` |
+| Cart & orders | `cart_items`, `orders`, `order_items` |
+| Suppliers & purchasing | `suppliers`, `purchase_orders`, `purchase_order_items` |
+| Delivery | `delivery_zones`, `delivery_providers`, `shipments` |
+| Framework infra | `sessions`, `cache`, `jobs`, `password_reset_tokens` |
 
 Use the admin panel for normal create, update, and delete work:
 
