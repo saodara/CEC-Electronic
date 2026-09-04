@@ -11,7 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Render (and most PaaS hosts) terminate TLS at their edge and proxy
+        // plain HTTP to this container, sending X-Forwarded-Proto/Host. Trust
+        // that so Laravel generates https:// URLs in production without
+        // depending on APP_URL being set correctly on the host.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
