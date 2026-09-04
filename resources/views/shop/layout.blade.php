@@ -213,6 +213,7 @@
             .device-scene{display:none}
             .service-row,.category-tiles,.brand-grid,.brand-page-hero{grid-template-columns:repeat(2,minmax(0,1fr))}
             .catalog{grid-template-columns:1fr}
+            .header{position:static}
             .filter{position:static}
             .grid,.catalog .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
             .footer .wrap,.detail,.checkout,.promo-band,.brand-page-hero,.auth-shell{grid-template-columns:1fr}
