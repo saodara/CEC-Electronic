@@ -34,7 +34,6 @@
                     </label>
                     <label>Payment
                         <select name="payment_method" data-payment-method>
-                            <option value="bakong">Bakong / KHQR</option>
                             <option value="cash_on_delivery">Cash on delivery</option>
                             <option value="bank_transfer">Bank transfer</option>
                         </select>
