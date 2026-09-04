@@ -8,8 +8,8 @@
             <h1>Welcome back to CEC Electronic</h1>
             <p>Login to view your order history, check delivery progress, keep warranty order numbers, and checkout faster next time.</p>
             <div class="service-row" style="grid-template-columns:1fr 1fr;margin-top:22px">
-                <div class="service" style="background:rgba(255,255,255,.1);border-radius:8px"><span class="service-icon">OR</span><span><strong style="color:#fff">Orders</strong><span style="color:#d9e7f7">Track purchases.</span></span></div>
-                <div class="service" style="background:rgba(255,255,255,.1);border-radius:8px"><span class="service-icon">WR</span><span><strong style="color:#fff">Warranty</strong><span style="color:#d9e7f7">Save records.</span></span></div>
+                <div class="service" style="background:rgba(255,255,255,.1);border-radius:8px"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/order-icon.png') }}" alt="Orders"></span><span><strong style="color:#fff">Orders</strong><span style="color:#d9e7f7">Track purchases.</span></span></div>
+                <div class="service" style="background:rgba(255,255,255,.1);border-radius:8px"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/warranty-icon.jpeg') }}" alt="Warranty"></span><span><strong style="color:#fff">Warranty</strong><span style="color:#d9e7f7">Save records.</span></span></div>
             </div>
         </div>
 

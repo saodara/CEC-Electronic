@@ -33,7 +33,7 @@
                             <div class="muted">{{ $customer->customer_email ?: 'No email' }}</div>
                         </td>
                         <td>{{ number_format($customer->orders_count) }}</td>
-                        <td>${{ number_format($customer->total_spent) }}</td>
+                        <td>${{ number_format($customer->total_spent, 2) }}</td>
                         <td>{{ \Illuminate\Support\Carbon::parse($customer->last_order_at)->format('M d, Y') }}</td>
                         <td>
                             <div class="actions">

@@ -28,7 +28,7 @@
                     <div style="display:grid;grid-template-columns:1fr 120px 90px;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding:14px 0">
                         <div>
                             <strong>{{ $item->product?->name ?: 'Deleted product' }}</strong>
-                            <div class="sku">${{ number_format($item->unit_price) }} each</div>
+                            <div class="sku">${{ number_format($item->unit_price, 2) }} each</div>
                         </div>
                         <form action="{{ route('cart.update', $item) }}" method="post">
                             @csrf
@@ -36,7 +36,7 @@
                             <input name="quantity" type="number" min="0" max="99" step="1" inputmode="numeric" pattern="[0-9]*" value="{{ (int) $item->quantity }}" onchange="this.value = Math.floor(Number(this.value || 0)); this.form.submit()" style="width:84px">
                         </form>
                         <div style="text-align:right">
-                            <strong>${{ number_format($item->line_total) }}</strong>
+                            <strong>${{ number_format($item->line_total, 2) }}</strong>
                             <form action="{{ route('cart.destroy', $item) }}" method="post" style="margin-top:8px">
                                 @csrf
                                 @method('DELETE')
@@ -53,11 +53,11 @@
             <p class="sku" style="margin-top:-4px;margin-bottom:14px">CEC Electronic retail order</p>
             <div style="display:flex;justify-content:space-between;color:var(--muted);margin-bottom:10px">
                 <span>Subtotal</span>
-                <span>${{ number_format($subtotal ?? 0) }}</span>
+                <span>${{ number_format($subtotal ?? 0, 2) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between;color:var(--muted);margin-bottom:18px">
                 <span>Delivery</span>
-                <span>{{ ($subtotal ?? 0) >= 500 ? 'Free' : '$5' }}</span>
+                <span>Free</span>
             </div>
             @guest
                 <div style="padding:11px 12px;margin-bottom:12px;border-radius:6px;background:#fff3cf;color:#8a5a00;font-weight:800">

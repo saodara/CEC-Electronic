@@ -25,9 +25,9 @@
             <div class="stock">{{ $product->stock_quantity > 0 ? 'In stock: '.$product->stock_quantity : 'Pre-order available' }}</div>
 
             <div style="margin:18px 0">
-                <span class="price">${{ number_format($product->price, 0) }}</span>
+                <span class="price">${{ number_format($product->price, 2) }}</span>
                 @if($oldPrice)
-                    <span class="old-price">${{ number_format($oldPrice, 0) }}</span>
+                    <span class="old-price">${{ number_format($oldPrice, 2) }}</span>
                 @endif
             </div>
 

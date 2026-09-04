@@ -39,9 +39,9 @@ class Product extends Model
             'specifications' => 'array',
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
-            'price' => 'integer',
-            'compare_at_price' => 'integer',
-            'cost_price' => 'integer',
+            'price' => 'decimal:2',
+            'compare_at_price' => 'decimal:2',
+            'cost_price' => 'decimal:2',
             'stock_quantity' => 'integer',
         ];
     }

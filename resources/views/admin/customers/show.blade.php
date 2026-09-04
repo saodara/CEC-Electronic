@@ -19,7 +19,7 @@
         </div>
         <div class="panel stat">
             <span>Total spent</span>
-            <strong>${{ number_format($stats['spent']) }}</strong>
+            <strong>${{ number_format($stats['spent'], 2) }}</strong>
         </div>
         <div class="panel stat">
             <span>Unpaid orders</span>
@@ -53,7 +53,7 @@
                         <td><span class="status {{ $order->status === 'pending' ? 'warning' : '' }}">{{ ucfirst($order->status) }}</span></td>
                         <td>{{ ucfirst(str_replace('_', ' ', $order->payment_status)) }}</td>
                         <td>{{ $order->items_count }}</td>
-                        <td>${{ number_format($order->grand_total) }}</td>
+                        <td>${{ number_format($order->grand_total, 2) }}</td>
                         <td><div class="actions"><a class="btn secondary" href="{{ route('admin.orders.show', $order) }}">Open order</a></div></td>
                     </tr>
                 @endforeach

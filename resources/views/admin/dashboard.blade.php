@@ -19,7 +19,7 @@
         </div>
         <div class="panel stat">
             <span>Revenue</span>
-            <strong>${{ number_format($stats['revenue']) }}</strong>
+            <strong>${{ number_format($stats['revenue'], 2) }}</strong>
         </div>
     </section>
 
@@ -34,7 +34,7 @@
         </div>
         <div class="panel stat">
             <span>Catalog value</span>
-            <strong>${{ number_format($stats['value']) }}</strong>
+            <strong>${{ number_format($stats['value'], 2) }}</strong>
         </div>
         <div class="panel stat">
             <span>Payment alerts</span>
@@ -56,7 +56,7 @@
                             <div class="muted">{{ $order->customer_name }} paid by {{ strtoupper(str_replace('_', ' ', $order->payment_method)) }}</div>
                         </div>
                         <div style="text-align:right">
-                            <strong>${{ number_format($order->grand_total) }}</strong>
+                            <strong>${{ number_format($order->grand_total, 2) }}</strong>
                             <div><span class="status unread">New payment</span></div>
                         </div>
                     </a>
@@ -79,7 +79,7 @@
                             <div class="muted">{{ $order->customer_name }} - {{ $order->customer_phone }}</div>
                         </div>
                         <div style="text-align:right">
-                            <strong>${{ number_format($order->grand_total) }}</strong>
+                            <strong>${{ number_format($order->grand_total, 2) }}</strong>
                             <div><span class="status {{ $order->status === 'pending' ? 'warning' : '' }}">{{ ucfirst($order->status) }}</span></div>
                         </div>
                     </div>
@@ -114,7 +114,7 @@
                                         <img class="thumb" src="{{ $product->image_url }}" alt="{{ $product->name }}">
                                         <div>
                                             <strong>{{ $product->name }}</strong>
-                                            <div class="muted">${{ number_format($product->price) }}</div>
+                                            <div class="muted">${{ number_format($product->price, 2) }}</div>
                                         </div>
                                     </div>
                                 </td>

@@ -13,7 +13,7 @@
             <a href="{{ route('account.orders.show', $order) }}" style="display:grid;grid-template-columns:1fr 130px 120px;gap:12px;border-bottom:1px solid var(--line);padding:12px 0">
                 <strong>{{ $order->order_number }}</strong>
                 <span>{{ ucfirst($order->status) }}</span>
-                <strong style="text-align:right">${{ number_format($order->grand_total) }}</strong>
+                <strong style="text-align:right">${{ number_format($order->grand_total, 2) }}</strong>
             </a>
         @empty
             <p style="color:var(--muted)">No orders yet.</p>

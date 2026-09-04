@@ -6,12 +6,12 @@
     @php
         $brands = collect(config('brands'))->filter(fn ($brand) => $brand['logo'])->values();
         $categoryTiles = [
-            ['slug' => 'laptops', 'name' => 'Laptops', 'copy' => 'Business, student, creator, and gaming notebooks.'],
-            ['slug' => 'desktops', 'name' => 'Desktop PC', 'copy' => 'Ready office PCs and custom build quotation.'],
-            ['slug' => 'gaming', 'name' => 'Gaming Gear', 'copy' => 'Gaming laptops, keyboards, mice, headsets, and chairs.'],
-            ['slug' => 'monitors', 'name' => 'Monitors', 'copy' => 'Office, gaming, ultrawide, and creator displays.'],
-            ['slug' => 'components', 'name' => 'Components', 'copy' => 'CPU, motherboard, RAM, SSD, GPU, PSU, and cases.'],
-            ['slug' => 'printers', 'name' => 'Printers', 'copy' => 'Inkjet, laser, scanner, copier, and office supply.'],
+            ['slug' => 'laptops', 'name' => 'Laptops', 'copy' => 'Business, student, creator, and gaming notebooks.', 'image' => 'MSFT-All-in-One_1040x585.avif'],
+            ['slug' => 'desktops', 'name' => 'Desktop PC', 'copy' => 'Ready office PCs and custom build quotation.', 'image' => 'desktop-pc.webp'],
+            ['slug' => 'gaming', 'name' => 'Gaming Gear', 'copy' => 'Gaming laptops, keyboards, mice, headsets, and chairs.', 'image' => 'gamming-gear.jpeg'],
+            ['slug' => 'monitors', 'name' => 'Monitors', 'copy' => 'Office, gaming, ultrawide, and creator displays.', 'image' => 'monitor.png'],
+            ['slug' => 'components', 'name' => 'Components', 'copy' => 'CPU, motherboard, RAM, SSD, GPU, PSU, and cases.', 'image' => 'component.jpeg'],
+            ['slug' => 'printers', 'name' => 'Printers', 'copy' => 'Inkjet, laser, scanner, copier, and office supply.', 'image' => 'printer.jpeg'],
         ];
     @endphp
 
@@ -65,10 +65,10 @@
     </section>
 
     <section class="service-row" aria-label="Store services">
-        <div class="panel service"><span class="service-icon">1H</span><span><strong>Same-day delivery</strong><span>Fast dispatch in Phnom Penh areas.</span></span></div>
-        <div class="panel service"><span class="service-icon">WR</span><span><strong>Warranty support</strong><span>Track service and product warranty.</span></span></div>
-        <div class="panel service"><span class="service-icon">PC</span><span><strong>Custom PC quote</strong><span>Build lists for gaming or office work.</span></span></div>
-        <div class="panel service"><span class="service-icon">$</span><span><strong>Secure checkout</strong><span>Cash on delivery and bank transfer.</span></span></div>
+        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/delivery-icon.png') }}" alt="Same-day delivery"></span><span><strong>Same-day delivery</strong><span>Fast dispatch in Phnom Penh areas.</span></span></div>
+        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/warranty-icon.jpeg') }}" alt="Warranty support"></span><span><strong>Warranty support</strong><span>Track service and product warranty.</span></span></div>
+        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/quote-icon.jpeg') }}" alt="Custom PC quote"></span><span><strong>Custom PC quote</strong><span>Build lists for gaming or office work.</span></span></div>
+        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/secure-checkout-icon.jpeg') }}" alt="Secure checkout"></span><span><strong>Secure checkout</strong><span>Cash on delivery and bank transfer.</span></span></div>
     </section>
 
     <section class="brand-showcase" aria-label="Featured brands">
@@ -105,6 +105,7 @@
     <section class="category-tiles">
         @foreach($categoryTiles as $tile)
             <a class="panel category-tile" href="{{ route('shop.category', $tile['slug']) }}">
+                <span class="category-tile-img"><img src="{{ asset('images/ShopCategory/' . $tile['image']) }}" alt="{{ $tile['name'] }}"></span>
                 <strong>{{ $tile['name'] }}</strong>
                 <span>{{ $tile['copy'] }}</span>
             </a>

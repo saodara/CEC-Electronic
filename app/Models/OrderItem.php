@@ -21,8 +21,8 @@ class OrderItem extends Model
     {
         return [
             'quantity' => 'integer',
-            'unit_price' => 'integer',
-            'line_total' => 'integer',
+            'unit_price' => 'decimal:2',
+            'line_total' => 'decimal:2',
         ];
     }
 

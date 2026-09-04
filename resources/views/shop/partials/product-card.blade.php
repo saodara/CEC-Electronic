@@ -8,7 +8,7 @@
 <article class="product-card">
     <a class="product-media" href="{{ route('shop.product', $p->slug) }}">
         @if($oldPrice)
-            <span class="badge">Save ${{ number_format($oldPrice - $p->price, 0) }}</span>
+            <span class="badge">Save ${{ number_format($oldPrice - $p->price, 2) }}</span>
         @endif
         <img src="{{ $image }}" alt="{{ $p->name }}">
     </a>
@@ -20,9 +20,9 @@
         <a class="product-title" href="{{ route('shop.product', $p->slug) }}">{{ $p->name }}</a>
         <p class="spec">{{ $p->description ?: 'Fast processor, bright display, reliable storage, and official warranty for work, study, and entertainment.' }}</p>
         <div>
-            <span class="price">${{ number_format($p->price, 0) }}</span>
+            <span class="price">${{ number_format($p->price, 2) }}</span>
             @if($oldPrice)
-                <span class="old-price">${{ number_format($oldPrice, 0) }}</span>
+                <span class="old-price">${{ number_format($oldPrice, 2) }}</span>
             @endif
         </div>
         <form class="card-actions" action="{{ route('cart.store', $p) }}" method="post">

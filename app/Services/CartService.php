@@ -78,7 +78,7 @@ class CartService
         $cartItem->delete();
     }
 
-    public function subtotal(Request $request): int
+    public function subtotal(Request $request): float
     {
         return $this->items($request)->sum(fn (CartItem $item) => $item->line_total);
     }

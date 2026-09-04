@@ -45,7 +45,8 @@
         .quick-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px}
         .quick{display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:42px}
         .quick:hover{border-color:#b8c7dc;background:#f8fbff}
-        .quick-icon{width:25px;height:25px;border-radius:5px;background:#eef5ff;color:var(--brand);display:grid;place-items:center;font-weight:900;font-size:11px;flex:0 0 auto}
+        .quick-icon{width:25px;height:25px;border-radius:5px;background:#eef5ff;color:var(--brand);display:grid;place-items:center;font-weight:900;font-size:11px;flex:0 0 auto;overflow:hidden}
+        .quick-icon img{width:100%;height:100%;object-fit:cover;display:block}
         .quick strong{display:block;font-size:13px;white-space:nowrap}
         .quick span span{display:block;color:var(--muted);font-size:11px;white-space:nowrap}
         .nav{background:var(--brand);color:#fff}
@@ -81,7 +82,8 @@
         .deal p{margin:0;color:var(--muted);line-height:1.55}
         .service-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
         .service{padding:13px;display:flex;gap:12px;align-items:center}
-        .service-icon{width:38px;height:38px;border-radius:8px;background:var(--accent-soft);display:grid;place-items:center;font-weight:900;color:#8a5a00;flex:0 0 auto}
+        .service-icon{width:38px;height:38px;border-radius:8px;background:var(--accent-soft);display:grid;place-items:center;font-weight:900;color:#8a5a00;flex:0 0 auto;overflow:hidden}
+        .service-icon img{width:100%;height:100%;object-fit:cover;display:block}
         .service strong{display:block}
         .service span{display:block;color:var(--muted);font-size:12px;margin-top:3px;line-height:1.35}
         .section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:20px 0 11px}
@@ -129,8 +131,10 @@
         .brand-card strong{font-size:15px}
         .brand-card span{color:var(--muted);font-size:12px}
         .category-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
-        .category-tile{padding:15px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between}
+        .category-tile{padding:15px;min-height:120px;display:flex;flex-direction:column;gap:10px}
         .category-tile:hover{border-color:#b8c7dc;box-shadow:0 10px 22px rgba(16,24,40,.08)}
+        .category-tile-img{width:100%;height:84px;border-radius:6px;overflow:hidden;background:#f3f6fb;flex:0 0 auto}
+        .category-tile-img img{width:100%;height:100%;object-fit:cover;display:block}
         .category-tile strong{font-size:16px;color:var(--brand)}
         .category-tile span{color:var(--muted);line-height:1.45;font-size:12px}
         .catalog{display:grid;grid-template-columns:256px minmax(0,1fr);gap:14px}
@@ -278,12 +282,12 @@
 
             <div class="quick-actions">
                 @auth
-                    <a class="quick" href="{{ route('account.dashboard') }}"><span class="quick-icon">AC</span><span><strong>Account</strong><span>{{ auth()->user()->name }}</span></span></a>
+                    <a class="quick" href="{{ route('account.dashboard') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/boy-account.png') }}" alt="Account"></span><span><strong>Account</strong><span>{{ auth()->user()->name }}</span></span></a>
                 @else
-                    <a class="quick" href="{{ route('customer.login') }}"><span class="quick-icon">IN</span><span><strong>Login</strong><span>Customer account</span></span></a>
-                    <a class="quick" href="{{ route('customer.register') }}"><span class="quick-icon">RG</span><span><strong>Register</strong><span>New customer</span></span></a>
+                    <a class="quick" href="{{ route('customer.login') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/login-icon.png') }}" alt="Login"></span><span><strong>Login</strong><span>Customer account</span></span></a>
+                    <a class="quick" href="{{ route('customer.register') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/register-icon.jpeg') }}" alt="Register"></span><span><strong>Register</strong><span>New customer</span></span></a>
                 @endauth
-                <a class="quick" href="{{ route('shop.cart') }}"><span class="quick-icon">CT</span><span><strong>Cart</strong><span>Checkout</span></span></a>
+                <a class="quick" href="{{ route('shop.cart') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/card.jpeg') }}" alt="Cart"></span><span><strong>Cart</strong><span>Checkout</span></span></a>
             </div>
         </div>
         <nav class="nav">

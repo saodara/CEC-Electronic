@@ -19,7 +19,7 @@ class CartItem extends Model
     {
         return [
             'quantity' => 'integer',
-            'unit_price' => 'integer',
+            'unit_price' => 'decimal:2',
         ];
     }
 
@@ -33,8 +33,8 @@ class CartItem extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function getLineTotalAttribute(): int
+    public function getLineTotalAttribute(): float
     {
-        return $this->quantity * $this->unit_price;
+        return $this->quantity * (float) $this->unit_price;
     }
 }

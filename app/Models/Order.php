@@ -42,6 +42,10 @@ class Order extends Model
     {
         return [
             'shipping_address' => 'array',
+            'subtotal' => 'decimal:2',
+            'shipping_total' => 'decimal:2',
+            'discount_total' => 'decimal:2',
+            'grand_total' => 'decimal:2',
             'placed_at' => 'datetime',
             'payment_confirmed_at' => 'datetime',
             'admin_payment_seen_at' => 'datetime',

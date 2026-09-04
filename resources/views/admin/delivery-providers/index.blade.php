@@ -20,7 +20,7 @@
                     <tr>
                         <td><strong>{{ $provider->name }}</strong><div class="muted">{{ $provider->tracking_url }}</div></td>
                         <td>{{ $provider->phone }}<div class="muted">{{ $provider->email }}</div></td>
-                        <td>${{ number_format($provider->base_fee) }}</td>
+                        <td>${{ number_format($provider->base_fee, 2) }}</td>
                         <td><span class="status">{{ $provider->is_active ? 'Active' : 'Hidden' }}</span></td>
                         <td><div class="actions"><a class="btn secondary" href="{{ route('admin.delivery-providers.edit', $provider) }}">Edit</a></div></td>
                     </tr>

@@ -15,7 +15,7 @@
                 <div style="display:grid;grid-template-columns:1fr 80px 100px;gap:12px;border-bottom:1px solid var(--line);padding:12px 0">
                     <strong>{{ $item->product_name }}</strong>
                     <span>x {{ $item->quantity }}</span>
-                    <strong style="text-align:right">${{ number_format($item->line_total) }}</strong>
+                    <strong style="text-align:right">${{ number_format($item->line_total, 2) }}</strong>
                 </div>
             @endforeach
         </div>
@@ -76,7 +76,7 @@
             </form>
 
             <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
-            <div style="display:flex;justify-content:space-between"><span>Total</span><strong>${{ number_format($order->grand_total) }}</strong></div>
+            <div style="display:flex;justify-content:space-between"><span>Total</span><strong>${{ number_format($order->grand_total, 2) }}</strong></div>
             <div style="margin-top:12px;color:var(--muted)">
                 Zone: {{ $order->deliveryZone?->name ?: 'Unassigned' }}<br>
                 Provider: {{ $order->deliveryProvider?->name ?: 'Unassigned' }}

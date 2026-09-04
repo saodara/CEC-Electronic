@@ -21,7 +21,7 @@
                         <div class="sku">{{ $item->sku ?: 'No SKU' }}</div>
                     </div>
                     <span>x {{ $item->quantity }}</span>
-                    <strong style="text-align:right">${{ number_format($item->line_total) }}</strong>
+                    <strong style="text-align:right">${{ number_format($item->line_total, 2) }}</strong>
                 </div>
             @endforeach
         </div>
@@ -33,9 +33,9 @@
                 <div class="spec-row"><span>Payment</span><strong>{{ ucfirst(str_replace('_', ' ', $order->payment_status)) }}</strong></div>
                 <div class="spec-row"><span>Delivery</span><strong>{{ $order->deliveryProvider?->name ?: ucfirst((string) $order->shipping_method) }}</strong></div>
                 <div class="spec-row"><span>Tracking</span><strong>{{ $order->tracking_number ?: 'Not assigned yet' }}</strong></div>
-                <div class="spec-row"><span>Subtotal</span><strong>${{ number_format($order->subtotal) }}</strong></div>
-                <div class="spec-row"><span>Delivery fee</span><strong>${{ number_format($order->shipping_total) }}</strong></div>
-                <div class="spec-row"><span>Total</span><strong>${{ number_format($order->grand_total) }}</strong></div>
+                <div class="spec-row"><span>Subtotal</span><strong>${{ number_format($order->subtotal, 2) }}</strong></div>
+                <div class="spec-row"><span>Delivery fee</span><strong>${{ number_format($order->shipping_total, 2) }}</strong></div>
+                <div class="spec-row"><span>Total</span><strong>${{ number_format($order->grand_total, 2) }}</strong></div>
             </div>
 
             @if($order->shipping_address)

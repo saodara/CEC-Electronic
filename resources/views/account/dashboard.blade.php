@@ -18,9 +18,9 @@
     </div>
 
     <section class="service-row">
-        <div class="panel service"><span class="service-icon">OR</span><span><strong>Orders</strong><span>{{ $orders->count() }} recent orders found.</span></span></div>
+        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/order-icon.png') }}" alt="Orders"></span><span><strong>Orders</strong><span>{{ $orders->count() }} recent orders found.</span></span></div>
         <div class="panel service"><span class="service-icon">DL</span><span><strong>Delivery</strong><span>Track assigned delivery provider and status.</span></span></div>
-        <div class="panel service"><span class="service-icon">WR</span><span><strong>Warranty</strong><span>Keep order numbers for service support.</span></span></div>
+        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/warranty-icon.jpeg') }}" alt="Warranty"></span><span><strong>Warranty</strong><span>Keep order numbers for service support.</span></span></div>
         <div class="panel service"><span class="service-icon">SP</span><span><strong>Support</strong><span>Call 012 220 152 for help.</span></span></div>
     </section>
 
@@ -33,7 +33,7 @@
                     <span class="sku" style="display:block">{{ $order->created_at->format('M d, Y') }}</span>
                 </span>
                 <span>{{ ucfirst($order->status) }}</span>
-                <strong style="text-align:right">${{ number_format($order->grand_total) }}</strong>
+                <strong style="text-align:right">${{ number_format($order->grand_total, 2) }}</strong>
             </a>
         @empty
             <p style="color:var(--muted)">No orders yet.</p>

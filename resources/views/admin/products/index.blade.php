@@ -38,7 +38,7 @@
                         </td>
                         <td>{{ $product->display_category ?: 'Uncategorized' }}</td>
                         <td>{{ $product->supplier?->name ?: 'No supplier' }}</td>
-                        <td>${{ number_format($product->price) }}</td>
+                        <td>${{ number_format($product->price, 2) }}</td>
                         <td><span class="status">In stock</span></td>
                         <td>
                             <div class="actions">

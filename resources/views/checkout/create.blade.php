@@ -51,18 +51,18 @@
                 @foreach($items as $item)
                     <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:10px">
                         <span>{{ $item->product?->name }} x {{ $item->quantity }}</span>
-                        <strong>${{ number_format($item->line_total) }}</strong>
+                        <strong>${{ number_format($item->line_total, 2) }}</strong>
                     </div>
                 @endforeach
                 <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
                 <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-                    <span>Subtotal</span><strong>${{ number_format($subtotal) }}</strong>
+                    <span>Subtotal</span><strong>${{ number_format($subtotal, 2) }}</strong>
                 </div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:16px">
-                    <span>Delivery</span><strong>{{ $subtotal >= 500 ? 'Free' : '$5' }}</strong>
+                    <span>Delivery</span><strong>Free</strong>
                 </div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:18px">
-                    <span>Total</span><strong data-payment-total>${{ number_format($subtotal + ($subtotal >= 500 ? 0 : 5)) }}</strong>
+                    <span>Total</span><strong data-payment-total>${{ number_format($subtotal, 2) }}</strong>
                 </div>
                 <button class="btn" style="width:100%" type="submit">Place order</button>
             </aside>

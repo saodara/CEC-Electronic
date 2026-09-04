@@ -20,7 +20,7 @@
 
     <div class="field">
         <label for="price">Price USD</label>
-        <input id="price" name="price" type="number" min="0" step="1" value="{{ old('price', $product->price ?? 0) }}" required>
+        <input id="price" name="price" type="number" min="0.01" step="0.01" value="{{ old('price', $product->price ?? 0) }}" required>
         @error('price') <span class="error">{{ $message }}</span> @enderror
     </div>
 
@@ -49,13 +49,13 @@
 
     <div class="field">
         <label for="compare_at_price">Compare at price</label>
-        <input id="compare_at_price" name="compare_at_price" type="number" min="0" value="{{ old('compare_at_price', $product->compare_at_price) }}">
+        <input id="compare_at_price" name="compare_at_price" type="number" min="0.01" step="0.01" value="{{ old('compare_at_price', $product->compare_at_price) }}">
         @error('compare_at_price') <span class="error">{{ $message }}</span> @enderror
     </div>
 
     <div class="field">
         <label for="cost_price">Cost price</label>
-        <input id="cost_price" name="cost_price" type="number" min="0" value="{{ old('cost_price', $product->cost_price) }}">
+        <input id="cost_price" name="cost_price" type="number" min="0.01" step="0.01" value="{{ old('cost_price', $product->cost_price) }}">
         @error('cost_price') <span class="error">{{ $message }}</span> @enderror
     </div>
 

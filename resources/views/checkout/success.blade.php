@@ -19,7 +19,7 @@
         </div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px;margin-top:18px">
             <span>Total</span>
-            <strong>${{ number_format($order->grand_total) }}</strong>
+            <strong>${{ number_format($order->grand_total, 2) }}</strong>
         </div>
         @if($needsBakongPayment)
             <div class="payment-note" style="margin-top:18px" data-payment-waiting-note>
@@ -37,7 +37,7 @@
             <div class="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title"
                  style="{{ $hasCheckoutUrl ? 'max-width:520px;width:96%' : '' }}">
                 <div class="payment-modal-head">
-                    <h3 id="payment-title">Pay with KHQR — ${{ number_format($order->grand_total) }}</h3>
+                    <h3 id="payment-title">Pay with KHQR — ${{ number_format($order->grand_total, 2) }}</h3>
                 </div>
                 <div class="payment-modal-body">
 
@@ -58,7 +58,7 @@
                             <span>Order</span><strong>{{ $order->order_number }}</strong>
                         </div>
                         <div class="payment-row">
-                            <span>Amount</span><strong>${{ number_format($order->grand_total) }}</strong>
+                            <span>Amount</span><strong>${{ number_format($order->grand_total, 2) }}</strong>
                         </div>
                         <div style="text-align:center;padding:16px 0 8px">
                             <img src="{{ $bakongQrImage }}"
@@ -66,7 +66,7 @@
                                  style="max-width:280px;width:100%;border-radius:8px;display:block;margin:0 auto">
                             <p style="font-size:13px;color:var(--muted);margin:10px 0 0">
                                 Scan with ABA, ACLEDA, Wing, Bakong, or any KHQR-supported app.<br>
-                                <strong>Amount ${{ number_format($order->grand_total) }} is fixed — cannot be changed.</strong>
+                                <strong>Amount ${{ number_format($order->grand_total, 2) }} is fixed — cannot be changed.</strong>
                             </p>
                         </div>
 
@@ -76,13 +76,13 @@
                             <span>Order</span><strong>{{ $order->order_number }}</strong>
                         </div>
                         <div class="payment-row">
-                            <span>Amount</span><strong>${{ number_format($order->grand_total) }}</strong>
+                            <span>Amount</span><strong>${{ number_format($order->grand_total, 2) }}</strong>
                         </div>
                         <div style="text-align:center;padding:16px 0 8px">
                             <canvas id="khqr-canvas" style="max-width:260px;width:100%;display:block;margin:0 auto;border-radius:8px"></canvas>
                             <p style="font-size:13px;color:var(--muted);margin:10px 0 0">
                                 Scan with ABA, ACLEDA, Wing, Bakong, or any KHQR-supported app.<br>
-                                <strong>Amount ${{ number_format($order->grand_total) }} is fixed — cannot be changed.</strong>
+                                <strong>Amount ${{ number_format($order->grand_total, 2) }} is fixed — cannot be changed.</strong>
                             </p>
                         </div>
                         @push('scripts')
@@ -117,7 +117,7 @@
                                 </div>
                                 <div style="display:flex;justify-content:space-between">
                                     <span style="color:var(--muted)">Amount due</span>
-                                    <strong>${{ number_format($order->grand_total) }}</strong>
+                                    <strong>${{ number_format($order->grand_total, 2) }}</strong>
                                 </div>
                             </div>
                         </div>

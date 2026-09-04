@@ -20,7 +20,7 @@ class CheckoutService
 
         return DB::transaction(function () use ($request, $data, $items) {
             $subtotal = $items->sum(fn (CartItem $item) => $item->line_total);
-            $shippingTotal = $subtotal >= 500 ? 0 : 5;
+            $shippingTotal = 0;
             $paymentMethod = $data['payment_method'] ?? 'bakong';
 
             $order = Order::create([

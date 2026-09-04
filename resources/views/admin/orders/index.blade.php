@@ -44,7 +44,7 @@
                             {{ ucfirst($order->payment_status) }}
                             <div class="muted">{{ strtoupper(str_replace('_', ' ', $order->payment_method)) }}</div>
                         </td>
-                        <td>${{ number_format($order->grand_total) }}</td>
+                        <td>${{ number_format($order->grand_total, 2) }}</td>
                         <td><div class="actions"><a class="btn secondary" href="{{ route('admin.orders.show', $order) }}">Open</a></div></td>
                     </tr>
                 @empty

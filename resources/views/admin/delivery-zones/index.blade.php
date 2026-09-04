@@ -20,7 +20,7 @@
                     <tr>
                         <td><strong>{{ $zone->name }}</strong></td>
                         <td>{{ $zone->city ?: 'Any city' }}<div class="muted">{{ $zone->province }}</div></td>
-                        <td>${{ number_format($zone->delivery_fee) }}</td>
+                        <td>${{ number_format($zone->delivery_fee, 2) }}</td>
                         <td>{{ $zone->estimated_days }} day(s)</td>
                         <td><span class="status">{{ $zone->is_active ? 'Active' : 'Hidden' }}</span></td>
                         <td><div class="actions"><a class="btn secondary" href="{{ route('admin.delivery-zones.edit', $zone) }}">Edit</a></div></td>
