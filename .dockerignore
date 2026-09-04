@@ -11,4 +11,5 @@ storage/logs/*.log
 storage/framework/cache
 storage/framework/sessions
 storage/framework/views
+storage/.docker_seeded
 *.log

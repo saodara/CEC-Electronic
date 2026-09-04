@@ -36,7 +36,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 
 WORKDIR /var/www/html
 
-# Nginx + entrypoint (code is bind-mounted at runtime)
+# App code. Locally, docker-compose bind-mounts over this; in production
+# (no bind mount) this is what actually ships.
+COPY . .
+
+RUN composer install --no-dev --optimize-autoloader --no-interaction \
+    && npm ci \
+    && npm run build \
+    && rm -rf node_modules \
+    && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs storage/app/public storage/app/private \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+# Nginx + entrypoint
 COPY docker/nginx.conf /etc/nginx/sites-available/default
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

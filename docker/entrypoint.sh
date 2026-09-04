@@ -9,11 +9,14 @@ if [ ! -f "$WORKDIR/.env" ]; then
     cp "$WORKDIR/.env.example" "$WORKDIR/.env"
 fi
 
-# Generate APP_KEY if not set
-APP_KEY=$(grep -E "^APP_KEY=" "$WORKDIR/.env" | cut -d= -f2 | tr -d '"')
-if [ -z "$APP_KEY" ]; then
-    echo "Generating application key..."
-    php artisan key:generate --no-interaction
+# Generate APP_KEY if not set (checks the real environment first, since in
+# production APP_KEY is injected by the host rather than living in .env)
+if [ -z "${APP_KEY:-}" ]; then
+    FILE_APP_KEY=$(grep -E "^APP_KEY=" "$WORKDIR/.env" | cut -d= -f2 | tr -d '"')
+    if [ -z "$FILE_APP_KEY" ]; then
+        echo "Generating application key..."
+        php artisan key:generate --no-interaction
+    fi
 fi
 
 # Install PHP dependencies if vendor is missing

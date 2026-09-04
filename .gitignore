@@ -20,6 +20,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/.docker_seeded
 /vendor
 _ide_helper.php
 Homestead.json
