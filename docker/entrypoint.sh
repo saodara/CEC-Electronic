@@ -81,6 +81,17 @@ if [ ! -f "$SEEDED_FLAG" ]; then
     touch "$SEEDED_FLAG"
 fi
 
+# Pre-compile Blade views, routes, and config while still running as root.
+# php-fpm workers run as www-data and can't write storage/framework/views at
+# request time on this host, which turns a harmless tempnam() fallback notice
+# into a fatal 500 on every page. Caching now means no runtime compile is
+# ever needed.
+echo "Caching views, routes, and config..."
+php artisan view:cache
+php artisan route:cache
+php artisan config:cache
+chown -R www-data:www-data "$WORKDIR/storage" "$WORKDIR/bootstrap/cache" 2>/dev/null || true
+
 # Start PHP-FPM in background
 php-fpm -D
 
