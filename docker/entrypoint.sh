@@ -39,9 +39,13 @@ php artisan storage:link --force 2>/dev/null || true
 chown -R www-data:www-data "$WORKDIR/storage" "$WORKDIR/bootstrap/cache" 2>/dev/null || true
 chmod -R 775 "$WORKDIR/storage" "$WORKDIR/bootstrap/cache" 2>/dev/null || true
 
-# Wait for the database
-echo "Waiting for database..."
-until php -r "
+# Wait for the database. Bounded and loud: an unreachable/misconfigured DB
+# must never hang silently, since that leaves nginx/php-fpm never starting
+# and no port ever opening (opaque "no open ports detected" from the host).
+echo "Waiting for database at ${DB_HOST:-<unset>}:${DB_PORT:-5432}..."
+DB_WAIT_ATTEMPTS=30
+i=0
+until DB_CHECK_OUTPUT=$(php -r "
 try {
     new PDO(
         'pgsql:host=${DB_HOST};port=${DB_PORT:-5432};dbname=${DB_DATABASE:-neondb};sslmode=${DB_SSLMODE:-require}',
@@ -50,9 +54,17 @@ try {
     );
     echo 'ok';
 } catch (Exception \$e) {
+    fwrite(STDERR, \$e->getMessage());
     exit(1);
 }
-" 2>/dev/null | grep -q ok; do
+" 2>&1); do
+    i=$((i + 1))
+    if [ "$i" -ge "$DB_WAIT_ATTEMPTS" ]; then
+        echo "Database still unreachable after ${DB_WAIT_ATTEMPTS} attempts. Last error: ${DB_CHECK_OUTPUT}"
+        echo "Check DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD, DB_SSLMODE."
+        exit 1
+    fi
+    echo "Database not ready yet (attempt ${i}/${DB_WAIT_ATTEMPTS}): ${DB_CHECK_OUTPUT}"
     sleep 2
 done
 echo "Database is ready."
