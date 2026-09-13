@@ -68,6 +68,15 @@
         textarea{min-height:150px;resize:vertical}
         .error{color:var(--danger);font-size:12px}
         .pagination{margin-top:16px}
+        .pager{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+        .pager-nav{padding:9px 16px}
+        .pager-nav.disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+        .pager-pages{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+        .pager-page{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;padding:0 6px;color:var(--ink);font-weight:700}
+        .pager-page:hover{background:#eef5ff;color:var(--brand)}
+        .pager-page.active{background:var(--brand);color:#fff}
+        .pager-dots{min-width:24px;text-align:center;color:var(--muted)}
+        .pager-summary{text-align:center;color:var(--muted);font-size:12.5px;margin-top:8px}
         @media (max-width:900px){
             .app{grid-template-columns:1fr}
             .sidebar{position:static;height:auto}
@@ -86,15 +95,14 @@
                 <span>Admin Panel</span>
             </a>
             <nav class="nav">
-                <a href="{{ route('admin.dashboard') }}">Dashboard</a>
-                <a href="{{ route('admin.products.index') }}">Products</a>
-                <a href="{{ route('admin.categories.index') }}">Categories</a>
-                <a href="{{ route('admin.suppliers.index') }}">Suppliers</a>
-                <a href="{{ route('admin.orders.index') }}">Orders</a>
-                <a href="{{ route('admin.customers.index') }}">Customers</a>
-                <a href="{{ route('admin.delivery-zones.index') }}">Delivery Zones</a>
-                <a href="{{ route('admin.delivery-providers.index') }}">Delivery Providers</a>
-                <a href="{{ route('admin.products.create') }}">Add Product</a>
+                <a href="{{ route('admin.dashboard') }}" @class(['active' => request()->routeIs('admin.dashboard')])>Dashboard</a>
+                <a href="{{ route('admin.products.index') }}" @class(['active' => request()->routeIs('admin.products.*') && ! request()->routeIs('admin.products.create')])>Products</a>
+                <a href="{{ route('admin.categories.index') }}" @class(['active' => request()->routeIs('admin.categories.*')])>Categories</a>
+                <a href="{{ route('admin.suppliers.index') }}" @class(['active' => request()->routeIs('admin.suppliers.*')])>Suppliers</a>
+                <a href="{{ route('admin.orders.index') }}" @class(['active' => request()->routeIs('admin.orders.*')])>Orders</a>
+                <a href="{{ route('admin.customers.index') }}" @class(['active' => request()->routeIs('admin.customers.*')])>Customers</a>
+                <a href="{{ route('admin.delivery-zones.index') }}" @class(['active' => request()->routeIs('admin.delivery-zones.*')])>Delivery</a>
+                <a href="{{ route('admin.products.create') }}" @class(['active' => request()->routeIs('admin.products.create')])>Add Product</a>
                 <a href="/">View Store</a>
             </nav>
         </aside>

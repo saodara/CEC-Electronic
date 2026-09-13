@@ -12,7 +12,7 @@ class DeliveryZoneController extends Controller
 {
     public function index(): View
     {
-        $zones = DeliveryZone::latest()->paginate(15);
+        $zones = DeliveryZone::latest()->paginate(10);
 
         return view('admin.delivery-zones.index', compact('zones'));
     }

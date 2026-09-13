@@ -35,13 +35,14 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
+        $sessionId = $request->session()->getId();
+
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             return back()
                 ->withErrors(['email' => 'Email or password is incorrect.'])
                 ->onlyInput('email');
         }
 
-        $sessionId = $request->session()->getId();
         $request->session()->regenerate();
         $this->cartService->mergeGuestCartIntoUser($sessionId, $request->user());
 
@@ -56,6 +57,8 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
+        $sessionId = $request->session()->getId();
+
         $user = User::create($data);
 
         Order::query()
@@ -64,7 +67,6 @@ class AuthController extends Controller
             ->update(['user_id' => $user->id]);
 
         Auth::login($user);
-        $sessionId = $request->session()->getId();
         $request->session()->regenerate();
         $this->cartService->mergeGuestCartIntoUser($sessionId, $user);
 

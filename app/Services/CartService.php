@@ -83,6 +83,11 @@ class CartService
         return $this->items($request)->sum(fn (CartItem $item) => $item->line_total);
     }
 
+    public function count(Request $request): int
+    {
+        return (int) $this->items($request)->sum('quantity');
+    }
+
     public function clear(Request $request): void
     {
         CartItem::query()

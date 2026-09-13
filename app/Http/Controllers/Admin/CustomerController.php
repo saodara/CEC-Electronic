@@ -22,7 +22,7 @@ class CustomerController extends Controller
             ])
             ->groupBy('customer_phone')
             ->orderByDesc('last_order_at')
-            ->paginate(15);
+            ->paginate(10);
 
         return view('admin.customers.index', compact('customers'));
     }

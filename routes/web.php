@@ -4,7 +4,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Admin\CustomerController as AdminCustomerController;
-use App\Http\Controllers\Admin\DeliveryProviderController as AdminDeliveryProviderController;
 use App\Http\Controllers\Admin\DeliveryZoneController as AdminDeliveryZoneController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -54,12 +53,11 @@ Route::post('/admin/logout', [AdminAuthController::class, 'destroy'])->name('adm
 
 Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAdminSession::class)->group(function () {
     Route::get('/', [AdminProductController::class, 'dashboard'])->name('dashboard');
-    Route::resource('products', AdminProductController::class)->except(['show']);
+    Route::resource('products', AdminProductController::class);
     Route::resource('categories', AdminCategoryController::class)->except(['show']);
     Route::resource('orders', AdminOrderController::class)->only(['index', 'show', 'update']);
     Route::get('customers', [AdminCustomerController::class, 'index'])->name('customers.index');
     Route::get('customers/{phone}', [AdminCustomerController::class, 'show'])->name('customers.show');
     Route::resource('suppliers', AdminSupplierController::class)->except(['show']);
     Route::resource('delivery-zones', AdminDeliveryZoneController::class)->except(['show']);
-    Route::resource('delivery-providers', AdminDeliveryProviderController::class)->except(['show']);
 });

@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Supplier;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -44,11 +45,20 @@ class ProductController extends Controller
         return view('admin.dashboard', compact('stats', 'latestProducts', 'latestOrders', 'paymentNotifications'));
     }
 
-    public function index(): View
+    public function index(Request $request): View|JsonResponse
     {
-        $products = Product::query()->with(['categoryRelation', 'supplier'])->latest()->paginate(12);
+        $products = Product::query()->with(['categoryRelation', 'supplier'])->latest()->paginate(10);
+
+        if ($request->wantsJson()) {
+            return response()->json($products);
+        }
 
         return view('admin.products.index', compact('products'));
+    }
+
+    public function show(Product $product): JsonResponse
+    {
+        return response()->json($product->load(['categoryRelation', 'supplier']));
     }
 
     public function create(): View

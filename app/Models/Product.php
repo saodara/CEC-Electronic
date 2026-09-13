@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Product extends Model
@@ -85,6 +84,9 @@ class Product extends Model
             return asset($this->image);
         }
 
-        return Storage::disk('public')->url($this->image);
+        // asset() (not Storage::disk('public')->url()) so this resolves against
+        // the actual request host, matching how the rest of the app derives URLs
+        // instead of depending on APP_URL (see commit a6d3a8b).
+        return asset('storage/' . $this->image);
     }
 }

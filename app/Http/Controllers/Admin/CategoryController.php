@@ -14,7 +14,7 @@ class CategoryController extends Controller
 {
     public function index(): View
     {
-        $categories = Category::query()->orderBy('sort_order')->latest()->paginate(20);
+        $categories = Category::query()->orderBy('sort_order')->latest()->paginate(10);
 
         return view('admin.categories.index', compact('categories'));
     }

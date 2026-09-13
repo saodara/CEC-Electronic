@@ -15,53 +15,18 @@
         ];
     @endphp
 
-    <section class="hero">
-        <aside class="panel category-menu">
-            <h3>All Categories</h3>
-            @foreach($categories as $cat)
-                <a class="category-link" href="{{ route('shop.category', $cat->slug) }}">
-                    <span>{{ $cat->name }}</span>
-                    <span>></span>
-                </a>
-            @endforeach
-            <a class="category-link" href="{{ route('shop.category', 'desktops') }}"><span>Desktop PC</span><span>></span></a>
-            <a class="category-link" href="{{ route('shop.category', 'monitors') }}"><span>Monitor & Display</span><span>></span></a>
-            <a class="category-link" href="{{ route('shop.category', 'components') }}"><span>Computer Components</span><span>></span></a>
-            <a class="category-link" href="{{ route('shop.category', 'printers') }}"><span>Printer & Scanner</span><span>></span></a>
-        </aside>
+    <section class="panel hero-slider" data-hero-slider aria-label="Featured promotions" aria-roledescription="carousel">
+        @foreach(['cover1', 'cover2', 'cover3', 'cover4'] as $i => $cover)
+            <div class="hero-slide{{ $i === 0 ? ' is-active' : '' }}" aria-hidden="{{ $i === 0 ? 'false' : 'true' }}">
+                <img src="{{ asset('images/Logo/' . $cover . '.png') }}" alt="CEC Electronic promotion {{ $i + 1 }}">
+            </div>
+        @endforeach
 
-        <div class="panel hero-main">
-            <div>
-                <div class="hero-points">
-                    <span>Official warranty</span>
-                    <span>Real shop support</span>
-                    <span>Fast local delivery</span>
-                </div>
-                <h1>Computer, laptop, printer, and IT products for every setup</h1>
-                <p>Browse clear product specs, real stock status, local warranty support, and fast CEC Electronic delivery.</p>
-                <a class="btn accent" href="{{ route('shop.category', 'laptops') }}">Shop laptops</a>
-                <a class="btn secondary" href="#featured">View best sellers</a>
-            </div>
-            <div class="device-scene" aria-hidden="true">
-                <div>
-                    <div class="laptop-art"><div class="laptop-screen"></div></div>
-                    <div class="laptop-base"></div>
-                </div>
-            </div>
+        <div class="hero-slider-dots">
+            @for($i = 0; $i < 4; $i++)
+                <button type="button" class="hero-slider-dot{{ $i === 0 ? ' is-active' : '' }}" data-hero-dot="{{ $i }}" aria-label="Go to slide {{ $i + 1 }}"></button>
+            @endfor
         </div>
-
-        <aside class="deal-stack">
-            <div class="panel deal">
-                <small>Hot promotion</small>
-                <b>New arrivals</b>
-                <p>Latest laptop, printer, monitor, and office IT products.</p>
-            </div>
-            <div class="panel deal">
-                <small>Business service</small>
-                <b>Office IT quote</b>
-                <p>Quote desktops, monitors, printers, and network devices for your team.</p>
-            </div>
-        </aside>
     </section>
 
     <section class="service-row" aria-label="Store services">
@@ -143,6 +108,49 @@
 
     @push('scripts')
         <script>
+            (function () {
+                var heroSlider = document.querySelector('[data-hero-slider]');
+                if (! heroSlider) return;
+
+                var slides = Array.prototype.slice.call(heroSlider.querySelectorAll('.hero-slide'));
+                var dots = Array.prototype.slice.call(heroSlider.querySelectorAll('[data-hero-dot]'));
+                var current = 0;
+                var timer = null;
+
+                function goTo(index) {
+                    slides[current].classList.remove('is-active');
+                    slides[current].setAttribute('aria-hidden', 'true');
+                    dots[current].classList.remove('is-active');
+
+                    current = (index + slides.length) % slides.length;
+
+                    slides[current].classList.add('is-active');
+                    slides[current].setAttribute('aria-hidden', 'false');
+                    dots[current].classList.add('is-active');
+                }
+
+                function start() {
+                    timer = setInterval(function () { goTo(current + 1); }, 5000);
+                }
+
+                function stop() {
+                    clearInterval(timer);
+                }
+
+                dots.forEach(function (dot, index) {
+                    dot.addEventListener('click', function () {
+                        goTo(index);
+                        stop();
+                        start();
+                    });
+                });
+
+                heroSlider.addEventListener('mouseenter', stop);
+                heroSlider.addEventListener('mouseleave', start);
+
+                if (slides.length > 1) start();
+            })();
+
             var brandSlider = document.querySelector('[data-brand-slider]');
 
             document.querySelectorAll('[data-brand-slide]').forEach(function (button) {

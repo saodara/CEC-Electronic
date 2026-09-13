@@ -25,23 +25,25 @@
                 </div>
             @else
                 @foreach($items as $item)
-                    <div style="display:grid;grid-template-columns:1fr 120px 90px;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding:14px 0">
+                    <div
+                        data-cart-item
+                        data-quantity="{{ (int) $item->quantity }}"
+                        data-update-url="{{ route('cart.update', $item) }}"
+                        data-remove-url="{{ route('cart.destroy', $item) }}"
+                        style="display:grid;grid-template-columns:1fr 120px 90px;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding:14px 0"
+                    >
                         <div>
                             <strong>{{ $item->product?->name ?: 'Deleted product' }}</strong>
                             <div class="sku">${{ number_format($item->unit_price, 2) }} each</div>
                         </div>
-                        <form action="{{ route('cart.update', $item) }}" method="post">
-                            @csrf
-                            @method('PATCH')
-                            <input name="quantity" type="number" min="0" max="99" step="1" inputmode="numeric" pattern="[0-9]*" value="{{ (int) $item->quantity }}" onchange="this.value = Math.floor(Number(this.value || 0)); this.form.submit()" style="width:84px">
-                        </form>
+                        <div class="qty-control">
+                            <button type="button" class="qty-btn" data-cart-qty="decrease" aria-label="Decrease quantity">−</button>
+                            <span data-cart-qty-value style="min-width:20px;text-align:center">{{ (int) $item->quantity }}</span>
+                            <button type="button" class="qty-btn" data-cart-qty="increase" aria-label="Increase quantity">+</button>
+                        </div>
                         <div style="text-align:right">
-                            <strong>${{ number_format($item->line_total, 2) }}</strong>
-                            <form action="{{ route('cart.destroy', $item) }}" method="post" style="margin-top:8px">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" style="border:0;background:transparent;color:#e11d48;cursor:pointer">Remove</button>
-                            </form>
+                            <strong data-cart-line-total>${{ number_format($item->line_total, 2) }}</strong>
+                            <button type="button" data-cart-remove style="border:0;background:transparent;color:#e11d48;cursor:pointer;display:block;margin-top:8px;margin-left:auto">Remove</button>
                         </div>
                     </div>
                 @endforeach
@@ -53,7 +55,7 @@
             <p class="sku" style="margin-top:-4px;margin-bottom:14px">CEC Electronic retail order</p>
             <div style="display:flex;justify-content:space-between;color:var(--muted);margin-bottom:10px">
                 <span>Subtotal</span>
-                <span>${{ number_format($subtotal ?? 0, 2) }}</span>
+                <span id="cart-subtotal">${{ number_format($subtotal ?? 0, 2) }}</span>
             </div>
             <div style="display:flex;justify-content:space-between;color:var(--muted);margin-bottom:18px">
                 <span>Delivery</span>

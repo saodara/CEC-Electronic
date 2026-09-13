@@ -25,7 +25,7 @@
                 <span class="old-price">${{ number_format($oldPrice, 2) }}</span>
             @endif
         </div>
-        <form class="card-actions" action="{{ route('cart.store', $p) }}" method="post">
+        <form class="card-actions" action="{{ route('cart.store', $p) }}" method="post" data-cart-add>
             @csrf
             <button class="btn" type="submit">Add to cart</button>
             <a class="icon-btn" href="{{ route('shop.product', $p->slug) }}" aria-label="View {{ $p->name }}" style="display:grid;place-items:center">i</a>

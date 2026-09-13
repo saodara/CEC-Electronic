@@ -52,7 +52,7 @@
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <form action="{{ route('cart.store', $product) }}" method="post">
+                <form action="{{ route('cart.store', $product) }}" method="post" data-cart-add>
                     @csrf
                     <button class="btn" style="width:100%" type="submit">Add to cart</button>
                 </form>

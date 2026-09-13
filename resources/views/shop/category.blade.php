@@ -6,10 +6,17 @@
     @php
         $brands = config('brands');
         $filterGroups = [
-            'Processor' => ['Intel Core i3','Intel Core i5','Intel Core i7','AMD Ryzen 5','AMD Ryzen 7','Apple M series'],
-            'RAM Size' => ['8GB','16GB','32GB','64GB'],
-            'Storage' => ['256GB SSD','512GB SSD','1TB SSD','2TB SSD'],
-            'Screen Size' => ['13 inch','14 inch','15.6 inch','16 inch','17 inch'],
+            'processor' => ['label' => 'Processor', 'options' => ['Intel Core','AMD Ryzen','Apple M series']],
+            'ram' => ['label' => 'RAM Size', 'options' => ['8GB','16GB','32GB','64GB']],
+            'storage' => ['label' => 'Storage', 'options' => ['256GB SSD','512GB SSD','1TB SSD','2TB SSD']],
+        ];
+        $priceRanges = ['Under $500', '$500 - $999', '$1,000 - $1,499', '$1,500+'];
+        $selected = [
+            'processor' => (array) request()->query('processor', []),
+            'ram' => (array) request()->query('ram', []),
+            'storage' => (array) request()->query('storage', []),
+            'price' => (array) request()->query('price', []),
+            'category' => (array) ($selectedCategories ?? []),
         ];
     @endphp
 
@@ -31,38 +38,52 @@
     <section class="catalog">
         <aside class="panel filter">
             <h3>Filters</h3>
-            <div class="filter-group">
-                <div class="filter-title"><span>Categories</span><span>-</span></div>
-                <div class="checks">
-                    <label><input type="checkbox" checked> {{ $categoryName }}</label>
-                    <label><input type="checkbox"> Gaming</label>
-                    <label><input type="checkbox"> Business model</label>
-                    <label><input type="checkbox"> 2-in-1 & tablet</label>
-                </div>
-            </div>
-            <div class="filter-group">
-                <div class="filter-title"><span>Price range</span><span>-</span></div>
-                <div class="checks">
-                    <label><input type="checkbox"> Under $500</label>
-                    <label><input type="checkbox"> $500 - $999</label>
-                    <label><input type="checkbox"> $1,000 - $1,499</label>
-                    <label><input type="checkbox"> $1,500+</label>
-                </div>
-            </div>
-            @foreach($filterGroups as $title => $options)
+            <form method="GET" action="{{ url()->current() }}">
+                @if(request()->query('q'))
+                    <input type="hidden" name="q" value="{{ request()->query('q') }}">
+                @endif
                 <div class="filter-group">
-                    <div class="filter-title"><span>{{ $title }}</span><span>-</span></div>
+                    <div class="filter-title"><span>Categories</span><span>-</span></div>
                     <div class="checks">
-                        @foreach($options as $option)
-                            <label><input type="checkbox"> {{ $option }}</label>
+                        @forelse($categories ?? [] as $cat)
+                            <label>
+                                <input type="checkbox" name="category[]" value="{{ $cat->slug }}"
+                                    @checked(in_array($cat->slug, $selected['category']))> {{ $cat->name }}
+                            </label>
+                        @empty
+                            <label><input type="checkbox" checked disabled> {{ $categoryName }}</label>
+                        @endforelse
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <div class="filter-title"><span>Price range</span><span>-</span></div>
+                    <div class="checks">
+                        @foreach($priceRanges as $range)
+                            <label>
+                                <input type="checkbox" name="price[]" value="{{ $range }}"
+                                    @checked(in_array($range, $selected['price']))> {{ $range }}
+                            </label>
                         @endforeach
                     </div>
                 </div>
-            @endforeach
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px">
-                <button class="btn secondary" type="button">Clear</button>
-                <button class="btn" type="button">Apply</button>
-            </div>
+                @foreach($filterGroups as $param => $group)
+                    <div class="filter-group">
+                        <div class="filter-title"><span>{{ $group['label'] }}</span><span>-</span></div>
+                        <div class="checks">
+                            @foreach($group['options'] as $option)
+                                <label>
+                                    <input type="checkbox" name="{{ $param }}[]" value="{{ $option }}"
+                                        @checked(in_array($option, $selected[$param]))> {{ $option }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                @endforeach
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px">
+                    <a class="btn secondary" href="{{ url()->current() }}{{ request()->query('q') ? '?q=' . urlencode(request()->query('q')) : '' }}">Clear</a>
+                    <button class="btn" type="submit">Apply</button>
+                </div>
+            </form>
         </aside>
 
         <div>

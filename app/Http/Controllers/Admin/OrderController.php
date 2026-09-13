@@ -18,7 +18,7 @@ class OrderController extends Controller
             ->with(['deliveryProvider', 'deliveryZone'])
             ->withCount('items')
             ->latest()
-            ->paginate(15);
+            ->paginate(10);
         $paymentNotificationsCount = Order::query()
             ->whereNotNull('payment_confirmed_at')
             ->whereNull('admin_payment_seen_at')
@@ -66,7 +66,7 @@ class OrderController extends Controller
                 [
                     'delivery_provider_id' => $data['delivery_provider_id'] ?? null,
                     'tracking_number' => $data['tracking_number'] ?? null,
-                    'status' => $data['delivered_at'] ? 'delivered' : ($data['shipped_at'] ? 'shipped' : 'pending'),
+                    'status' => ($data['delivered_at'] ?? null) ? 'delivered' : (($data['shipped_at'] ?? null) ? 'shipped' : 'pending'),
                     'delivery_fee' => $order->shipping_total,
                     'picked_up_at' => $data['shipped_at'] ?? null,
                     'delivered_at' => $data['delivered_at'] ?? null,
