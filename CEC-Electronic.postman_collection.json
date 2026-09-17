@@ -1,0 +1,2396 @@
+{
+  "info": {
+    "name": "CEC Electronic - Full API",
+    "_postman_id": "cec-electronic-full-0d143002e7e1",
+    "description": "Covers every route in routes/web.php: storefront browsing, cart, checkout, customer auth/account, and full admin CRUD (products, categories, orders, customers, suppliers, delivery zones).\n\nHow CSRF is handled: this app's CSRF middleware (Illuminate\\Foundation\\Http\\Middleware\\PreventRequestForgery) skips token verification whenever the request's `Sec-Fetch-Site` header says `same-origin` -- real browsers set this automatically on same-origin requests and page JS cannot override it, so it's a valid signal there. Every request in this collection sets that header directly, which is why plain JSON bodies work everywhere with no hidden `_token` field or XSRF cookie dance needed.\n\nRun order matters: this collection uses ONE shared session/cookie jar. Run folders top to bottom in the Collection Runner (Bootstrap -> Customer Auth -> Customer Account -> Storefront -> Cart -> Checkout -> Admin Auth -> Admin *). Logging in as Admin replaces the Customer session (same `users` table / same guard), so Customer-only requests must run before Admin Login.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "admin_email",
+      "value": "admin@cecelectronic.com",
+      "type": "string"
+    },
+    {
+      "key": "admin_password",
+      "value": "CHANGE_ME",
+      "type": "string"
+    },
+    {
+      "key": "customer_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customer_password",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "product_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "product_slug",
+      "value": "CHANGE_ME-a-real-product-slug",
+      "type": "string"
+    },
+    {
+      "key": "category_slug",
+      "value": "CHANGE_ME-a-real-category-slug",
+      "type": "string"
+    },
+    {
+      "key": "brand_slug",
+      "value": "CHANGE_ME-a-real-brand-slug",
+      "type": "string"
+    },
+    {
+      "key": "cart_item_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "order_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "customer_phone",
+      "value": "CHANGE_ME-a-real-customer-phone",
+      "type": "string"
+    },
+    {
+      "key": "admin_product_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "category_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supplier_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "delivery_zone_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "bakong_session_id",
+      "value": "CHANGE_ME-a-real-bakong-session-id",
+      "type": "string"
+    },
+    {
+      "key": "csrf_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Bootstrap",
+      "item": [
+        {
+          "name": "Start Session (Home Page)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Server reachable', () => pm.expect(pm.response.code).to.equal(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Customer Auth (Register + Login)",
+      "item": [
+        {
+          "name": "Register Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Register (creates account + logs in)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Test Customer\",\n    \"email\": \"{{customer_email}}\",\n    \"password\": \"{{customer_password}}\",\n    \"password_confirmation\": \"{{customer_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('customer_email') || pm.collectionVariables.get('customer_email') === '') {",
+                  "    pm.collectionVariables.set('customer_email', `customer.${Date.now()}@example.com`);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registered + redirected (not validation error)', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 302]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{customer_email}}\",\n    \"password\": \"{{customer_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logged in (not 419/422)', () => pm.expect(pm.response.code).to.be.oneOf([200, 302]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Storefront",
+      "item": [
+        {
+          "name": "Home",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": []
+            }
+          }
+        },
+        {
+          "name": "Search Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/search?q=laptop",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "laptop"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Brands List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/brands",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "brands"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Brand Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/brands/{{brand_slug}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "brands",
+                "{{brand_slug}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Category Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/category/{{category_slug}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "category",
+                "{{category_slug}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Product Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/product/{{product_slug}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "product",
+                "{{product_slug}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Cart",
+      "item": [
+        {
+          "name": "View Cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add To Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart",
+                "{{product_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Added to cart', () => pm.expect(pm.response.code).to.equal(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Cart Item",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart/items/{{cart_item_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart",
+                "items",
+                "{{cart_item_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"quantity\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Remove Cart Item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cart/items/{{cart_item_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cart",
+                "items",
+                "{{cart_item_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Checkout",
+      "item": [
+        {
+          "name": "Checkout Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/checkout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "checkout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Place Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/checkout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "checkout"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customer_name\": \"Test Customer\",\n    \"customer_email\": \"{{customer_email}}\",\n    \"customer_phone\": \"012345678\",\n    \"address_line_1\": \"123 Test Street\",\n    \"address_line_2\": \"\",\n    \"city\": \"Phnom Penh\",\n    \"province\": \"Phnom Penh\",\n    \"country\": \"Cambodia\",\n    \"shipping_method\": \"standard\",\n    \"payment_method\": \"cod\",\n    \"notes\": \"Created by Postman collection test.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order placed (302 redirect to success page)', () => {",
+                  "    pm.expect(pm.response.code).to.equal(302);",
+                  "});",
+                  "const location = pm.response.headers.get('Location') || '';",
+                  "const match = location.match(/checkout\\/success\\/(\\d+)/);",
+                  "if (match) {",
+                  "    pm.collectionVariables.set('order_id', match[1]);",
+                  "    console.log('Captured order_id:', match[1]);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "Order Success Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/checkout/success/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "checkout",
+                "success",
+                "{{order_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Order Payment Status (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/checkout/payment-status/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "checkout",
+                "payment-status",
+                "{{order_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Customer Account",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/account",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "account"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Order History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/account/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "account",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/account/orders/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "account",
+                "orders",
+                "{{order_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Customer Logout",
+      "item": [
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "logout"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logged out', () => pm.expect(pm.response.code).to.be.oneOf([200, 302]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 - Admin Auth",
+      "item": [
+        {
+          "name": "Admin Login Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"_token\": \"{{csrf_token}}\",\n    \"email\": \"{{admin_email}}\",\n    \"password\": \"{{admin_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "    url: pm.variables.replaceIn('{{base_url}}/admin/login'),",
+                  "    method: 'GET'",
+                  "}, function (err, res) {",
+                  "    if (err) {",
+                  "        console.error('Could not load admin login page for CSRF token', err);",
+                  "        return;",
+                  "    }",
+                  "    const html = res.text();",
+                  "    const match = html.match(/name=\"_token\" value=\"([^\"]+)\"/);",
+                  "    if (match) {",
+                  "        pm.collectionVariables.set('csrf_token', match[1]);",
+                  "    } else {",
+                  "        console.error('Could not find _token input on admin login page');",
+                  "    }",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin logged in (not 419/422)', () => pm.expect(pm.response.code).to.be.oneOf([200, 302]));",
+                  "if (pm.response.code === 419) console.error('419 - check admin_password matches ADMIN_PASSWORD in .env');",
+                  "if (pm.response.code === 422) console.error('422 - wrong email/password, or not flagged is_admin in DB');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 - Admin Products",
+      "item": [
+        {
+          "name": "Admin Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Products (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const list = body.data || [];",
+                  "if (list.length) {",
+                  "    pm.collectionVariables.set('admin_product_id', String(list[0].id));",
+                  "    console.log('Captured admin_product_id:', list[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products",
+                "create"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Postman Test Laptop",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Created by the Postman collection.",
+                  "type": "text"
+                },
+                {
+                  "key": "category_id",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "supplier_id",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "999.99",
+                  "type": "text"
+                },
+                {
+                  "key": "compare_at_price",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "cost_price",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "stock_quantity",
+                  "value": "10",
+                  "type": "text"
+                },
+                {
+                  "key": "sku",
+                  "value": "PM-TEST-{{$timestamp}}",
+                  "type": "text"
+                },
+                {
+                  "key": "is_active",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "is_featured",
+                  "value": "0",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Product created (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "List Products After Create (JSON, captures admin_product_id)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const list = body.data || [];",
+                  "if (list.length) {",
+                  "    pm.collectionVariables.set('admin_product_id', String(list[0].id));",
+                  "    console.log('Captured admin_product_id:', list[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Show Product (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products/{{admin_product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products",
+                "{{admin_product_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edit Product Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products/{{admin_product_id}}/edit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products",
+                "{{admin_product_id}}",
+                "edit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products/{{admin_product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products",
+                "{{admin_product_id}}"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Postman Test Laptop (Updated)",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Updated by the Postman collection.",
+                  "type": "text"
+                },
+                {
+                  "key": "category_id",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "supplier_id",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "899.99",
+                  "type": "text"
+                },
+                {
+                  "key": "stock_quantity",
+                  "value": "5",
+                  "type": "text"
+                },
+                {
+                  "key": "is_active",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "is_featured",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Product updated (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products/{{admin_product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products",
+                "{{admin_product_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Product deleted (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Admin Categories",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const match = pm.response.text().match(/admin\\/categories\\/(\\d+)\\/edit/);",
+                  "if (match) {",
+                  "    pm.collectionVariables.set('category_id', match[1]);",
+                  "    console.log('Captured category_id:', match[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Category Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories",
+                "create"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "parent_id",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "name",
+                  "value": "Postman Test Category",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Created by the Postman collection.",
+                  "type": "text"
+                },
+                {
+                  "key": "is_active",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "0",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Category created (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "List Categories After Create (captures category_id)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const match = pm.response.text().match(/admin\\/categories\\/(\\d+)\\/edit/);",
+                  "if (match) {",
+                  "    pm.collectionVariables.set('category_id', match[1]);",
+                  "    console.log('Captured category_id:', match[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit Category Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories/{{category_id}}/edit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories",
+                "{{category_id}}",
+                "edit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories/{{category_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories",
+                "{{category_id}}"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "parent_id",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "name",
+                  "value": "Postman Test Category (Updated)",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Updated by the Postman collection.",
+                  "type": "text"
+                },
+                {
+                  "key": "is_active",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Category updated (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories/{{category_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories",
+                "{{category_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Category deleted (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Admin Orders",
+      "item": [
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Show Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "{{order_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "{{order_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"processing\",\n    \"payment_status\": \"paid\",\n    \"delivery_zone_id\": \"\",\n    \"delivery_provider_id\": \"\",\n    \"tracking_number\": \"TRACK-{{$timestamp}}\",\n    \"shipped_at\": \"\",\n    \"delivered_at\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order updated (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Admin Customers",
+      "item": [
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "customers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Show Customer",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/customers/{{customer_phone}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "customers",
+                "{{customer_phone}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Admin Suppliers",
+      "item": [
+        {
+          "name": "List Suppliers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/suppliers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "suppliers"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const match = pm.response.text().match(/admin\\/suppliers\\/(\\d+)\\/edit/);",
+                  "if (match) {",
+                  "    pm.collectionVariables.set('supplier_id', match[1]);",
+                  "    console.log('Captured supplier_id:', match[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Supplier Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/suppliers/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "suppliers",
+                "create"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/suppliers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "suppliers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Postman Test Supplier\",\n    \"company_name\": \"Postman Testing Co.\",\n    \"email\": \"supplier@example.com\",\n    \"phone\": \"012345678\",\n    \"website\": \"https://example.com\",\n    \"address\": \"123 Supplier Street\",\n    \"contact_person\": \"Jane Doe\",\n    \"payment_terms\": \"Net 30\",\n    \"is_active\": true,\n    \"notes\": \"Created by the Postman collection.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Supplier created (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "List Suppliers After Create (captures supplier_id)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/suppliers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "suppliers"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const match = pm.response.text().match(/admin\\/suppliers\\/(\\d+)\\/edit/);",
+                  "if (match) {",
+                  "    pm.collectionVariables.set('supplier_id', match[1]);",
+                  "    console.log('Captured supplier_id:', match[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit Supplier Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/suppliers/{{supplier_id}}/edit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "suppliers",
+                "{{supplier_id}}",
+                "edit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Supplier",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/suppliers/{{supplier_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "suppliers",
+                "{{supplier_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Postman Test Supplier (Updated)\",\n    \"company_name\": \"Postman Testing Co.\",\n    \"email\": \"supplier@example.com\",\n    \"is_active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Supplier updated (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "Delete Supplier",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/suppliers/{{supplier_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "suppliers",
+                "{{supplier_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Supplier deleted (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Admin Delivery Zones",
+      "item": [
+        {
+          "name": "List Delivery Zones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/delivery-zones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-zones"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const match = pm.response.text().match(/admin\\/delivery-zones\\/(\\d+)\\/edit/);",
+                  "if (match) {",
+                  "    pm.collectionVariables.set('delivery_zone_id', match[1]);",
+                  "    console.log('Captured delivery_zone_id:', match[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Delivery Zone Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/delivery-zones/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-zones",
+                "create"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Delivery Zone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/delivery-zones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-zones"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Postman Test Zone\",\n    \"city\": \"Phnom Penh\",\n    \"province\": \"Phnom Penh\",\n    \"delivery_fee\": 2,\n    \"free_delivery_minimum\": 50,\n    \"estimated_days\": 2,\n    \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delivery zone created (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "List Delivery Zones After Create (captures delivery_zone_id)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/delivery-zones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-zones"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const match = pm.response.text().match(/admin\\/delivery-zones\\/(\\d+)\\/edit/);",
+                  "if (match) {",
+                  "    pm.collectionVariables.set('delivery_zone_id', match[1]);",
+                  "    console.log('Captured delivery_zone_id:', match[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit Delivery Zone Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/delivery-zones/{{delivery_zone_id}}/edit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-zones",
+                "{{delivery_zone_id}}",
+                "edit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Delivery Zone",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/delivery-zones/{{delivery_zone_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-zones",
+                "{{delivery_zone_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Postman Test Zone (Updated)\",\n    \"delivery_fee\": 3,\n    \"is_active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delivery zone updated (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        },
+        {
+          "name": "Delete Delivery Zone",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/delivery-zones/{{delivery_zone_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "delivery-zones",
+                "{{delivery_zone_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delivery zone deleted (302 redirect)', () => pm.expect(pm.response.code).to.equal(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false,
+            "followOriginalHttpMethod": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Admin Logout",
+      "item": [
+        {
+          "name": "Admin Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Webhooks",
+      "item": [
+        {
+          "name": "Bakong Payment Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Sec-Fetch-Site",
+                "value": "same-origin"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/webhooks/bakong",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "bakong"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"session_id\": \"{{bakong_session_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Webhook accepted', () => pm.expect(pm.response.code).to.equal(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,10 @@
 
 @section('content')
     <div class="toolbar">
+        <div>
+            <h2 style="margin:0">{{ $order->order_number }}</h2>
+            <p class="muted" style="margin:6px 0 0">Placed {{ $order->placed_at?->format('M d, Y h:i A') ?? $order->created_at->format('M d, Y h:i A') }}</p>
+        </div>
         <a class="btn secondary" href="{{ route('admin.orders.index') }}">Back to orders</a>
     </div>
 
@@ -14,7 +18,7 @@
             @foreach($order->items as $item)
                 <div style="display:grid;grid-template-columns:1fr 80px 100px;gap:12px;border-bottom:1px solid var(--line);padding:12px 0">
                     <strong>{{ $item->product_name }}</strong>
-                    <span>x {{ $item->quantity }}</span>
+                    <span class="muted">x {{ $item->quantity }}</span>
                     <strong style="text-align:right">${{ number_format($item->line_total, 2) }}</strong>
                 </div>
             @endforeach
@@ -22,12 +26,24 @@
 
         <aside class="panel" style="padding:18px">
             <h3 style="margin-top:0">Customer</h3>
-            <p>{{ $order->customer_name }}<br>{{ $order->customer_phone }}<br>{{ $order->customer_email }}</p>
+            <p class="muted" style="line-height:1.7">{{ $order->customer_name }}<br>{{ $order->customer_phone }}<br>{{ $order->customer_email }}</p>
 
             @if($order->payment_confirmed_at)
-                <div style="padding:12px;margin-bottom:14px;border-radius:7px;background:#fff3cf;color:#8a5a00;font-weight:800">
-                    Payment verified by {{ strtoupper(str_replace('_', ' ', $order->payment_method)) }} at {{ $order->payment_confirmed_at->format('M d, Y h:i A') }}.
+                <div class="payment-verified-banner">
+                    <span class="icon">&#10003;</span>
+                    <span>
+                        <strong>Payment verified</strong>
+                        <span>Via {{ strtoupper(str_replace('_', ' ', $order->payment_method)) }} &middot; {{ $order->payment_confirmed_at->format('M d, Y h:i A') }}</span>
+                    </span>
                 </div>
+            @elseif($order->payment_method === 'bakong' && $order->bakong_qr_md5)
+                @if(session('status'))
+                    <div class="muted" style="margin-bottom:10px">{{ session('status') }}</div>
+                @endif
+                <form action="{{ route('admin.orders.verify-payment', $order) }}" method="post" style="margin-bottom:14px">
+                    @csrf
+                    <button class="btn secondary" style="width:100%" type="submit">Verify with Bakong now</button>
+                </form>
             @endif
 
             <form action="{{ route('admin.orders.update', $order) }}" method="post">
@@ -76,8 +92,8 @@
             </form>
 
             <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
-            <div style="display:flex;justify-content:space-between"><span>Total</span><strong>${{ number_format($order->grand_total, 2) }}</strong></div>
-            <div style="margin-top:12px;color:var(--muted)">
+            <div style="display:flex;justify-content:space-between;font-size:16px"><span>Total</span><strong style="color:var(--brand)">${{ number_format($order->grand_total, 2) }}</strong></div>
+            <div class="muted" style="margin-top:12px;line-height:1.7">
                 Zone: {{ $order->deliveryZone?->name ?: 'Unassigned' }}<br>
                 Provider: {{ $order->deliveryProvider?->name ?: 'Unassigned' }}
             </div>

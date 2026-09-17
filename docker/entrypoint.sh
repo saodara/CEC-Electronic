@@ -92,6 +92,10 @@ php artisan route:cache
 php artisan config:cache
 chown -R www-data:www-data "$WORKDIR/storage" "$WORKDIR/bootstrap/cache" 2>/dev/null || true
 
+# Start the Laravel scheduler in the background (drives bakong:check-pending
+# among other scheduled tasks — routes/console.php registers what runs).
+php artisan schedule:work >> "$WORKDIR/storage/logs/schedule.log" 2>&1 &
+
 # Start PHP-FPM in background
 php-fpm -D
 

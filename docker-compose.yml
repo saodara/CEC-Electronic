@@ -1,8 +1,9 @@
 services:
   app:
     build: .
+    restart: unless-stopped
     ports:
-      - "8080:80"
+      - "${APP_PORT:-8080}:80"
     volumes:
       - .:/var/www/html
     # The default DNS (host router) intermittently fails to resolve external

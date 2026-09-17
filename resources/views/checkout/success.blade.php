@@ -5,72 +5,77 @@
 @section('content')
     @php
         $needsBakongPayment = $order->payment_method === 'bakong' && $order->payment_status !== 'paid';
-        $hasCheckoutUrl     = $needsBakongPayment && $order->bakong_checkout_url;
-        $hasQrImage         = $needsBakongPayment && ! $hasCheckoutUrl && ! empty($bakongQrImage);
-        $hasQrString        = $needsBakongPayment && ! $hasCheckoutUrl && ! $hasQrImage && $order->bakong_qr_string;
+        $hasQrString        = $needsBakongPayment && $order->bakong_qr_string;
+        $isPaid             = $order->payment_status === 'paid';
     @endphp
 
-    <div class="panel" style="padding:28px;max-width:760px;margin:0 auto">
-        <h1 style="margin-top:0">Order placed</h1>
-        <p style="color:var(--muted)">Thank you. Your order number is <strong>{{ $order->order_number }}</strong>.</p>
-        <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px;margin-top:18px">
-            <span>Payment</span>
-            <strong data-order-payment-label>{{ ucfirst(str_replace('_', ' ', $order->payment_status)) }}</strong>
+    <div class="panel receipt-card">
+        <div class="success-hero">
+            <div class="check">&#10003;</div>
+            <h1>Order placed successfully!</h1>
+            <p>Thank you, {{ $order->customer_name }}. We've received your order.</p>
         </div>
-        <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px;margin-top:18px">
-            <span>Total</span>
-            <strong>${{ number_format($order->grand_total, 2) }}</strong>
-        </div>
-        @if($needsBakongPayment)
-            <div class="payment-note" style="margin-top:18px" data-payment-waiting-note>
-                Please scan the KHQR code and pay. This page updates automatically once payment is confirmed.
+
+        <div class="receipt-body">
+            <div class="receipt-order-no">Order number<br><strong>{{ $order->order_number }}</strong></div>
+
+            <div class="receipt-row">
+                <span>Payment method</span>
+                <strong>{{ ucfirst(str_replace('_', ' ', $order->payment_method ?? 'N/A')) }}</strong>
             </div>
-        @endif
-        <div style="margin-top:20px;display:flex;gap:10px">
-            <a class="btn" href="{{ route('shop.home') }}">Continue shopping</a>
-            <a class="btn secondary" href="{{ route('account.orders') }}">View orders</a>
+            <div class="receipt-row">
+                <span>Payment status</span>
+                <strong data-order-payment-label>
+                    <span class="status-pill {{ $isPaid ? 'is-paid' : 'is-pending' }}">
+                        {{ $isPaid ? '● Paid' : '● Pending' }}
+                    </span>
+                </strong>
+            </div>
+            <div class="receipt-row is-total">
+                <span>Total</span>
+                <strong>${{ number_format($order->grand_total, 2) }}</strong>
+            </div>
+
+            @if($needsBakongPayment)
+                <div class="payment-note" style="margin-top:18px" data-payment-waiting-note>
+                    Please scan the KHQR code and pay. This page updates automatically once payment is confirmed.
+                </div>
+            @endif
+
+            <div class="next-steps">
+                <div>
+                    <span class="num">1</span>
+                    <strong>Processing</strong>
+                    <span>We're preparing your order</span>
+                </div>
+                <div>
+                    <span class="num">2</span>
+                    <strong>Shipping</strong>
+                    <span>Out for delivery</span>
+                </div>
+                <div>
+                    <span class="num">3</span>
+                    <strong>Delivered</strong>
+                    <span>Enjoy your purchase</span>
+                </div>
+            </div>
+
+            <div class="receipt-actions">
+                <a class="btn secondary" href="{{ route('shop.home') }}">Continue shopping</a>
+                <a class="btn" href="{{ route('account.orders') }}">View orders</a>
+            </div>
         </div>
     </div>
 
     @if($needsBakongPayment)
         <div class="modal-backdrop is-open" data-payment-modal aria-hidden="false">
-            <div class="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title"
-                 style="{{ $hasCheckoutUrl ? 'max-width:520px;width:96%' : '' }}">
-                <div class="payment-modal-head">
+            <div class="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+                <div class="payment-modal-head" data-payment-modal-head>
                     <h3 id="payment-title">Pay with KHQR — ${{ number_format($order->grand_total, 2) }}</h3>
                 </div>
-                <div class="payment-modal-body">
+                <div class="payment-modal-body" data-payment-modal-body>
 
-                    @if($hasCheckoutUrl)
-                        {{-- Hosted Bakong checkout iframe --}}
-                        <iframe
-                            src="{{ $order->bakong_checkout_url }}"
-                            width="100%"
-                            height="560"
-                            allow="clipboard-write"
-                            style="border:none;border-radius:12px;display:block"
-                            title="Bakong KHQR Payment">
-                        </iframe>
-
-                    @elseif($hasQrImage)
-                        {{-- Styled KHQR image from the relay API — amount is locked --}}
-                        <div class="payment-row">
-                            <span>Order</span><strong>{{ $order->order_number }}</strong>
-                        </div>
-                        <div class="payment-row">
-                            <span>Amount</span><strong>${{ number_format($order->grand_total, 2) }}</strong>
-                        </div>
-                        <div style="text-align:center;padding:16px 0 8px">
-                            <img src="{{ $bakongQrImage }}"
-                                 alt="KHQR {{ $order->order_number }}"
-                                 style="max-width:280px;width:100%;border-radius:8px;display:block;margin:0 auto">
-                            <p style="font-size:13px;color:var(--muted);margin:10px 0 0">
-                                Scan with ABA, ACLEDA, Wing, Bakong, or any KHQR-supported app.<br>
-                                <strong>Amount ${{ number_format($order->grand_total, 2) }} is fixed — cannot be changed.</strong>
-                            </p>
-                        </div>
-
-                    @elseif($hasQrString)
+                    @if($hasQrString)
                         {{-- Raw KHQR string rendered as a plain QR code in-browser --}}
                         <div class="payment-row">
                             <span>Order</span><strong>{{ $order->order_number }}</strong>
@@ -79,16 +84,15 @@
                             <span>Amount</span><strong>${{ number_format($order->grand_total, 2) }}</strong>
                         </div>
                         <div style="text-align:center;padding:16px 0 8px">
-                            <canvas id="khqr-canvas" style="max-width:260px;width:100%;display:block;margin:0 auto;border-radius:8px"></canvas>
+                            <div id="khqr-canvas" style="max-width:260px;width:260px;display:inline-block;margin:0 auto;border-radius:8px;overflow:hidden;padding:10px;background:#fff;border:1px solid var(--line)"></div>
                             <p style="font-size:13px;color:var(--muted);margin:10px 0 0">
                                 Scan with ABA, ACLEDA, Wing, Bakong, or any KHQR-supported app.<br>
                                 <strong>Amount ${{ number_format($order->grand_total, 2) }} is fixed — cannot be changed.</strong>
                             </p>
                         </div>
                         @push('scripts')
-                        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
-                                integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSE1FtjHQuFhKZ/z6DMgI9gonzj4i7/KHGE5A=="
-                                crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+                        {{-- Self-hosted: don't depend on an external CDN to render a payment QR --}}
+                        <script src="{{ asset('vendor/qrcodejs/qrcode.min.js') }}"></script>
                         <script>
                             (function () {
                                 var canvas = document.getElementById('khqr-canvas');
@@ -96,8 +100,8 @@
                                 var qrString = @json($order->bakong_qr_string);
                                 var qr = new QRCode(canvas, {
                                     text:   qrString,
-                                    width:  260,
-                                    height: 260,
+                                    width:  240,
+                                    height: 240,
                                     correctLevel: QRCode.CorrectLevel.M,
                                 });
                             })();
@@ -108,7 +112,7 @@
                         <div style="text-align:center;padding:24px 12px">
                             <p style="font-weight:700;margin:0 0 6px">KHQR payment is not configured.</p>
                             <p style="color:var(--muted);margin:0 0 16px;font-size:13px">
-                                Set <code>BAKONG_ACCOUNT_ID</code> in your .env file.
+                                Set <code>BAKONG_ACCOUNT_USERNAME</code> and <code>BAKONG_ACCESS_TOKEN</code> in your .env file.
                             </p>
                             <div style="background:var(--surface,#f4f4f5);border-radius:8px;padding:14px;text-align:left;font-size:14px">
                                 <div style="display:flex;justify-content:space-between;margin-bottom:6px">
@@ -124,7 +128,7 @@
                     @endif
 
                     <div class="payment-note" data-payment-status-message style="margin-top:12px">
-                        Waiting for payment confirmation…
+                        &#8987; Waiting for payment confirmation…
                     </div>
                 </div>
             </div>
@@ -134,10 +138,15 @@
             <script>
                 (function () {
                     var modal         = document.querySelector('[data-payment-modal]');
+                    var modalHead     = document.querySelector('[data-payment-modal-head]');
+                    var modalBody     = document.querySelector('[data-payment-modal-body]');
                     var statusMessage = document.querySelector('[data-payment-status-message]');
                     var waitingNote   = document.querySelector('[data-payment-waiting-note]');
                     var paymentLabel  = document.querySelector('[data-order-payment-label]');
                     var statusUrl     = @json(route('checkout.payment-status', $order));
+                    var ordersUrl     = @json(route('account.orders'));
+                    var orderNumber   = @json($order->order_number);
+                    var amountLabel   = @json('$' . number_format($order->grand_total, 2));
                     var attempts = 0;
                     var timer;
 
@@ -145,9 +154,33 @@
 
                     function markPaid() {
                         window.clearInterval(timer);
-                        modal.classList.remove('is-open');
-                        modal.setAttribute('aria-hidden', 'true');
-                        if (paymentLabel) paymentLabel.textContent = 'Paid';
+
+                        if (modalHead) {
+                            modalHead.innerHTML = '<h3 id="payment-title">Payment successful</h3>';
+                        }
+                        if (modalBody) {
+                            modalBody.innerHTML =
+                                '<div style="text-align:center;padding:12px 4px 4px">' +
+                                    '<div style="width:64px;height:64px;border-radius:50%;background:#ecfdf3;color:#087443;' +
+                                        'display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:32px;line-height:1">&#10003;</div>' +
+                                    '<h4 style="margin:0 0 6px;font-size:18px;color:var(--ink)">Payment successful!</h4>' +
+                                    '<p style="margin:0 0 18px;color:var(--muted)">Order <strong>' + orderNumber + '</strong> — ' + amountLabel + ' paid via KHQR.</p>' +
+                                    '<button type="button" class="btn" data-payment-success-close style="width:100%">Continue</button>' +
+                                '</div>';
+
+                            var closeBtn = modalBody.querySelector('[data-payment-success-close]');
+                            if (closeBtn) {
+                                closeBtn.addEventListener('click', function () {
+                                    modal.classList.remove('is-open');
+                                    modal.setAttribute('aria-hidden', 'true');
+                                    window.location.href = ordersUrl;
+                                });
+                            }
+                        }
+
+                        if (paymentLabel) {
+                            paymentLabel.innerHTML = '<span class="status-pill is-paid">&#9679; Paid</span>';
+                        }
                         if (waitingNote) {
                             waitingNote.textContent = 'Payment received. Your order is being processed.';
                             waitingNote.style.background = '#ecfdf3';
@@ -155,15 +188,30 @@
                         }
                     }
 
+                    // Bakong's transaction-check API allows very few requests per
+                    // day for the whole store, so this polls slowly and stops
+                    // after a while rather than hammering it while a tab sits open.
+                    var POLL_INTERVAL_MS = 15000;
+                    var MAX_ATTEMPTS     = 40; // ~10 minutes
+
                     function checkPayment() {
                         attempts += 1;
+
+                        if (attempts > MAX_ATTEMPTS) {
+                            window.clearInterval(timer);
+                            if (statusMessage) {
+                                statusMessage.textContent = 'Still not confirmed. If you already paid, refresh this page in a minute — no need to pay again.';
+                            }
+                            return;
+                        }
+
                         fetch(statusUrl, {
                             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                         })
                         .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
                         .then(function (data) {
                             if (data.is_paid) { markPaid(); return; }
-                            if (statusMessage && attempts % 4 === 0) {
+                            if (statusMessage && attempts % 2 === 0) {
                                 statusMessage.textContent = 'Still waiting — keep this page open after scanning.';
                             }
                         })
@@ -176,7 +224,7 @@
                         if (e.data && e.data.event === 'payment_success') checkPayment();
                     });
 
-                    timer = window.setInterval(checkPayment, 5000);
+                    timer = window.setInterval(checkPayment, POLL_INTERVAL_MS);
                     checkPayment();
                 })();
             </script>

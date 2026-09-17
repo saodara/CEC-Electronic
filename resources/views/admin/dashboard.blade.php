@@ -6,39 +6,39 @@
 @section('content')
     <section class="stats">
         <div class="panel stat">
-            <span>Total products</span>
-            <strong>{{ number_format($stats['products']) }}</strong>
+            <span class="stat-icon blue">&#128421;</span>
+            <span class="stat-body"><span>Total products</span><strong>{{ number_format($stats['products']) }}</strong></span>
         </div>
         <div class="panel stat">
-            <span>Orders</span>
-            <strong>{{ number_format($stats['orders']) }}</strong>
+            <span class="stat-icon purple">&#129534;</span>
+            <span class="stat-body"><span>Orders</span><strong>{{ number_format($stats['orders']) }}</strong></span>
         </div>
         <div class="panel stat">
-            <span>Customers</span>
-            <strong>{{ number_format($stats['customers']) }}</strong>
+            <span class="stat-icon cyan">&#128101;</span>
+            <span class="stat-body"><span>Customers</span><strong>{{ number_format($stats['customers']) }}</strong></span>
         </div>
         <div class="panel stat">
-            <span>Revenue</span>
-            <strong>${{ number_format($stats['revenue'], 2) }}</strong>
+            <span class="stat-icon green">&#128176;</span>
+            <span class="stat-body"><span>Revenue</span><strong>${{ number_format($stats['revenue'], 2) }}</strong></span>
         </div>
     </section>
 
     <section class="stats">
         <div class="panel stat">
-            <span>Categories</span>
-            <strong>{{ number_format($stats['categories']) }}</strong>
+            <span class="stat-icon blue">&#128194;</span>
+            <span class="stat-body"><span>Categories</span><strong>{{ number_format($stats['categories']) }}</strong></span>
         </div>
         <div class="panel stat">
-            <span>Low stock</span>
-            <strong>{{ number_format($stats['low_stock']) }}</strong>
+            <span class="stat-icon red">&#9888;</span>
+            <span class="stat-body"><span>Low stock</span><strong>{{ number_format($stats['low_stock']) }}</strong></span>
         </div>
         <div class="panel stat">
-            <span>Catalog value</span>
-            <strong>${{ number_format($stats['value'], 2) }}</strong>
+            <span class="stat-icon green">&#128181;</span>
+            <span class="stat-body"><span>Catalog value</span><strong>${{ number_format($stats['value'], 2) }}</strong></span>
         </div>
         <div class="panel stat">
-            <span>Payment alerts</span>
-            <strong>{{ number_format($stats['payment_notifications']) }}</strong>
+            <span class="stat-icon amber">&#128276;</span>
+            <span class="stat-body"><span>Payment alerts</span><strong>{{ number_format($stats['payment_notifications']) }}</strong></span>
         </div>
     </section>
 

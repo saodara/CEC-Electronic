@@ -10,6 +10,7 @@ use App\Services\CheckoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class CheckoutController extends Controller
@@ -42,6 +43,14 @@ class CheckoutController extends Controller
                 ->with('status', 'Please login or register before checkout.');
         }
 
+        // A double-submitted "Place order" (double-click, back-button resubmit,
+        // slow-network retry) would otherwise reach CheckoutService with an
+        // already-cleared cart from the first successful submission and crash
+        // with a raw 422 — fail soft here instead, before doing any work.
+        if ($this->cartService->items($request)->isEmpty()) {
+            return redirect()->route('shop.cart')->with('status', 'Your cart is empty.');
+        }
+
         $data = $request->validate([
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_email' => ['nullable', 'email', 'max:255'],
@@ -59,28 +68,13 @@ class CheckoutController extends Controller
         $order = $this->checkoutService->createOrder($request, $data);
 
         if ($order->payment_method === 'bakong') {
-            $bakong = app(BakongService::class);
-
             // Generate a fixed-amount QR and store the string + md5 for payment polling.
-            $qrData = $bakong->generateQrForOrder($order);
+            $qrData = app(BakongService::class)->generateQrForOrder($order);
             if ($qrData) {
-                $updates = [
+                $order->update([
                     'bakong_qr_string' => $qrData['qr'],
                     'bakong_qr_md5'    => $qrData['md5'],
-                ];
-
-                // Optionally try hosted web checkout for a better mobile experience.
-                $session = $bakong->createWebCheckout(
-                    $order,
-                    route('checkout.success', $order),
-                    route('bakong.webhook')
-                );
-                if ($session) {
-                    $updates['bakong_session_id']   = $session['session_id'];
-                    $updates['bakong_checkout_url'] = $session['checkout_url'];
-                }
-
-                $order->update($updates);
+                ]);
             }
         }
 
@@ -93,35 +87,27 @@ class CheckoutController extends Controller
 
         $order->load('items');
 
-        $bakongQrImage = null;
-        if ($order->payment_method === 'bakong'
-            && $order->payment_status !== 'paid'
-            && $order->bakong_qr_string
-            && ! $order->bakong_checkout_url
-        ) {
-            $bakongQrImage = app(BakongService::class)->generateImage($order->bakong_qr_string);
-        }
-
-        return view('checkout.success', compact('order', 'bakongQrImage'));
+        return view('checkout.success', compact('order'));
     }
 
     public function paymentStatus(Request $request, Order $order): JsonResponse
     {
         abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
 
-        if ($order->payment_status === 'unpaid') {
-            $bakong = app(BakongService::class);
-            $paid = false;
+        // Bakong's check-transaction API is rate-limited to a small number of
+        // requests per day for the whole store. The checkout page polls this
+        // route every 15s while a tab is open, so throttling outbound Bakong
+        // calls to the same 15s window did nothing — a single customer
+        // leaving a tab open for the ~10 minute polling window could burn
+        // nearly half the daily budget alone. Throttle well below the poll
+        // rate instead, so the UI can still poll for a fast response without
+        // every poll spending part of the shared daily quota.
+        $throttleKey = "bakong-check:{$order->id}";
 
-            if ($order->bakong_session_id) {
-                $details = $bakong->getCheckoutDetails($order->bakong_session_id);
-                $paid = ($details['status'] ?? '') === 'PAID';
-            } elseif ($order->bakong_qr_md5) {
-                $tx = $bakong->checkTransactionByMd5($order->bakong_qr_md5);
-                $paid = $tx !== null;
-            }
+        if ($order->payment_status === 'unpaid' && $order->bakong_qr_md5 && Cache::add($throttleKey, true, 60)) {
+            $tx = app(BakongService::class)->checkTransactionByMd5($order->bakong_qr_md5);
 
-            if ($paid) {
+            if ($tx !== null) {
                 $order->update([
                     'payment_status'      => 'paid',
                     'payment_confirmed_at' => now(),
@@ -136,39 +122,5 @@ class CheckoutController extends Controller
             'is_paid' => $order->payment_status === 'paid',
             'paid_at' => $order->payment_confirmed_at?->toIso8601String(),
         ]);
-    }
-
-    /**
-     * Bakong Relay webhook — called server-to-server when payment completes.
-     * No CSRF token required (exempted in routes/web.php).
-     */
-    public function webhook(Request $request): JsonResponse
-    {
-        $sessionId = $request->input('session_id')
-            ?? $request->input('data.session_id')
-            ?? null;
-
-        if (! $sessionId) {
-            return response()->json(['ok' => false, 'error' => 'missing session_id'], 422);
-        }
-
-        $order = Order::where('bakong_session_id', $sessionId)->first();
-
-        if (! $order || $order->payment_status === 'paid') {
-            return response()->json(['ok' => true]);
-        }
-
-        // Verify with Bakong before trusting the webhook payload.
-        $bakong = app(BakongService::class);
-        $details = $bakong->getCheckoutDetails($sessionId);
-
-        if (($details['status'] ?? '') === 'PAID') {
-            $order->update([
-                'payment_status' => 'paid',
-                'payment_confirmed_at' => now(),
-            ]);
-        }
-
-        return response()->json(['ok' => true]);
     }
 }

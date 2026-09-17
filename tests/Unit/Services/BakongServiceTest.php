@@ -20,26 +20,26 @@ class BakongServiceTest extends TestCase
     private function configureBakong(array $overrides = []): void
     {
         config(array_merge([
-            'services.bakong.relay_url' => 'https://relay.test',
-            'services.bakong.account_id' => '855012345678',
-            'services.bakong.token' => 'test-token',
-            'services.bakong.merchant_name' => 'CEC Electronic',
+            'services.bakong.base_url' => 'https://api-bakong.test/v1',
+            'services.bakong.account_username' => '855012345678',
+            'services.bakong.account_name' => 'CEC Electronic',
+            'services.bakong.access_token' => 'test-token',
             'services.bakong.merchant_city' => 'Phnom Penh',
         ], $overrides));
     }
 
-    public function test_is_configured_is_false_when_account_id_is_blank(): void
+    public function test_is_configured_is_false_when_account_username_is_blank(): void
     {
-        config(['services.bakong.account_id' => '']);
+        config(['services.bakong.account_username' => '']);
 
         $service = new BakongService();
 
         $this->assertFalse($service->isConfigured());
     }
 
-    public function test_is_configured_is_true_when_account_id_is_set(): void
+    public function test_is_configured_is_true_when_account_username_is_set(): void
     {
-        config(['services.bakong.account_id' => '855012345678']);
+        config(['services.bakong.account_username' => '855012345678']);
 
         $service = new BakongService();
 
@@ -48,7 +48,7 @@ class BakongServiceTest extends TestCase
 
     public function test_generate_qr_for_order_returns_null_when_not_configured(): void
     {
-        config(['services.bakong.account_id' => '']);
+        config(['services.bakong.account_username' => '']);
         $service = new BakongService();
 
         $result = $service->generateQrForOrder($this->order());
@@ -72,196 +72,25 @@ class BakongServiceTest extends TestCase
         $this->assertArrayHasKey('qr', $result);
         $this->assertArrayHasKey('md5', $result);
         $this->assertSame(md5($result['qr']), $result['md5']);
-        // The order's account id, amount and order number are wired into the QR payload.
+        // The order's account username, amount and order number are wired into the QR payload.
         $this->assertStringContainsString('855012345678', $result['qr']);
         $this->assertStringContainsString('12.34', $result['qr']);
         $this->assertStringContainsString('EH-20260906-9999', $result['qr']);
     }
 
-    public function test_generate_image_returns_null_when_relay_url_not_configured(): void
+    public function test_check_transaction_by_md5_returns_null_when_base_url_blank(): void
     {
-        config(['services.bakong.relay_url' => '']);
+        $this->configureBakong(['services.bakong.base_url' => '']);
         $service = new BakongService();
 
-        $result = $service->generateImage('some-qr-string');
+        $result = $service->checkTransactionByMd5('abc123');
 
         $this->assertNull($result);
     }
 
-    public function test_generate_image_returns_base64_image_on_success(): void
+    public function test_check_transaction_by_md5_returns_null_when_access_token_blank(): void
     {
-        $this->configureBakong();
-
-        Http::fake([
-            'https://relay.test/v1/generate_khqr_image' => Http::response([
-                'responseCode' => 0,
-                'data' => ['image' => 'data:image/png;base64,AAAA'],
-            ]),
-        ]);
-
-        $service = new BakongService();
-
-        $result = $service->generateImage('some-qr-string');
-
-        $this->assertSame('data:image/png;base64,AAAA', $result);
-
-        Http::assertSent(function ($request) {
-            return $request->url() === 'https://relay.test/v1/generate_khqr_image'
-                && $request['qr'] === 'some-qr-string';
-        });
-    }
-
-    public function test_generate_image_returns_null_on_nonzero_response_code(): void
-    {
-        $this->configureBakong();
-
-        Http::fake([
-            'https://relay.test/v1/generate_khqr_image' => Http::response([
-                'responseCode' => 1,
-                'data' => ['image' => null],
-            ]),
-        ]);
-
-        $service = new BakongService();
-
-        $result = $service->generateImage('some-qr-string');
-
-        $this->assertNull($result);
-    }
-
-    public function test_generate_image_returns_null_on_unsuccessful_response(): void
-    {
-        $this->configureBakong();
-
-        Http::fake([
-            'https://relay.test/v1/generate_khqr_image' => Http::response(['error' => 'boom'], 500),
-        ]);
-
-        $service = new BakongService();
-
-        $result = $service->generateImage('some-qr-string');
-
-        $this->assertNull($result);
-    }
-
-    public function test_create_web_checkout_returns_null_when_not_configured(): void
-    {
-        config(['services.bakong.account_id' => '']);
-        $service = new BakongService();
-
-        $result = $service->createWebCheckout($this->order(), 'https://shop.test/return', 'https://shop.test/webhook');
-
-        $this->assertNull($result);
-    }
-
-    public function test_create_web_checkout_posts_expected_payload_and_returns_data_on_success(): void
-    {
-        $this->configureBakong();
-
-        Http::fake([
-            'https://relay.test/v1/web_checkouts/create' => Http::response([
-                'responseCode' => 0,
-                'data' => ['session_id' => 'sess-123', 'checkout_url' => 'https://relay.test/checkout/sess-123'],
-            ]),
-        ]);
-
-        $service = new BakongService();
-
-        $order = $this->order([
-            'order_number' => 'EH-20260906-4321',
-            'grand_total' => 88.0,
-        ]);
-
-        $result = $service->createWebCheckout($order, 'https://shop.test/return', 'https://shop.test/webhook');
-
-        $this->assertSame([
-            'session_id' => 'sess-123',
-            'checkout_url' => 'https://relay.test/checkout/sess-123',
-        ], $result);
-
-        Http::assertSent(function ($request) {
-            return $request->url() === 'https://relay.test/v1/web_checkouts/create'
-                && $request['trans_id'] === 'EH-20260906-4321'
-                && $request['req_khqr']['account_id'] === '855012345678'
-                && $request['req_khqr']['merchant_name'] === 'CEC Electronic'
-                && $request['req_khqr']['merchant_city'] === 'Phnom Penh'
-                && $request['req_khqr']['amount'] === 88.0
-                && $request['req_khqr']['currency'] === 'USD'
-                && $request['req_url']['return_url'] === 'https://shop.test/return'
-                && $request['req_url']['webhook_url'] === 'https://shop.test/webhook'
-                && $request->hasHeader('Authorization', 'Bearer test-token');
-        });
-    }
-
-    public function test_create_web_checkout_returns_null_on_failure(): void
-    {
-        $this->configureBakong();
-
-        Http::fake([
-            'https://relay.test/v1/web_checkouts/create' => Http::response([
-                'responseCode' => 1,
-                'message' => 'failed',
-            ]),
-        ]);
-
-        $service = new BakongService();
-
-        $result = $service->createWebCheckout($this->order(), 'https://shop.test/return', 'https://shop.test/webhook');
-
-        $this->assertNull($result);
-    }
-
-    public function test_get_checkout_details_returns_null_when_relay_url_blank(): void
-    {
-        config(['services.bakong.relay_url' => '']);
-        $service = new BakongService();
-
-        $result = $service->getCheckoutDetails('sess-123');
-
-        $this->assertNull($result);
-    }
-
-    public function test_get_checkout_details_returns_data_on_success(): void
-    {
-        $this->configureBakong();
-
-        Http::fake([
-            'https://relay.test/v1/web_checkouts/details' => Http::response([
-                'responseCode' => 0,
-                'data' => ['status' => 'PAID'],
-            ]),
-        ]);
-
-        $service = new BakongService();
-
-        $result = $service->getCheckoutDetails('sess-123');
-
-        $this->assertSame(['status' => 'PAID'], $result);
-
-        Http::assertSent(function ($request) {
-            return $request->url() === 'https://relay.test/v1/web_checkouts/details'
-                && $request['session_id'] === 'sess-123';
-        });
-    }
-
-    public function test_get_checkout_details_returns_null_on_failure(): void
-    {
-        $this->configureBakong();
-
-        Http::fake([
-            'https://relay.test/v1/web_checkouts/details' => Http::response(['responseCode' => 1]),
-        ]);
-
-        $service = new BakongService();
-
-        $result = $service->getCheckoutDetails('sess-123');
-
-        $this->assertNull($result);
-    }
-
-    public function test_check_transaction_by_md5_returns_null_when_relay_url_blank(): void
-    {
-        config(['services.bakong.relay_url' => '']);
+        $this->configureBakong(['services.bakong.access_token' => '']);
         $service = new BakongService();
 
         $result = $service->checkTransactionByMd5('abc123');
@@ -274,8 +103,9 @@ class BakongServiceTest extends TestCase
         $this->configureBakong();
 
         Http::fake([
-            'https://relay.test/v1/check_transaction_by_md5' => Http::response([
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::response([
                 'responseCode' => 0,
+                'responseMessage' => 'Getting transaction data successfully',
                 'data' => ['hash' => 'abc123', 'amount' => 12.34],
             ]),
         ]);
@@ -287,17 +117,22 @@ class BakongServiceTest extends TestCase
         $this->assertSame(['hash' => 'abc123', 'amount' => 12.34], $result);
 
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://relay.test/v1/check_transaction_by_md5'
-                && $request['md5'] === 'abc123';
+            return $request->url() === 'https://api-bakong.test/v1/check_transaction_by_md5'
+                && $request['md5'] === 'abc123'
+                && $request->hasHeader('Authorization', 'Bearer test-token');
         });
     }
 
-    public function test_check_transaction_by_md5_returns_null_on_failure(): void
+    public function test_check_transaction_by_md5_returns_null_when_not_yet_paid(): void
     {
         $this->configureBakong();
 
         Http::fake([
-            'https://relay.test/v1/check_transaction_by_md5' => Http::response([], 404),
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::response([
+                'responseCode' => 1,
+                'responseMessage' => 'Transaction not found',
+                'data' => null,
+            ]),
         ]);
 
         $service = new BakongService();
@@ -305,5 +140,77 @@ class BakongServiceTest extends TestCase
         $result = $service->checkTransactionByMd5('abc123');
 
         $this->assertNull($result);
+    }
+
+    public function test_check_transaction_by_md5_returns_null_on_unsuccessful_response(): void
+    {
+        $this->configureBakong();
+
+        Http::fake([
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::response(['error' => 'boom'], 500),
+        ]);
+
+        $service = new BakongService();
+
+        $result = $service->checkTransactionByMd5('abc123');
+
+        $this->assertNull($result);
+    }
+
+    public function test_check_transaction_by_md5_skips_the_call_once_daily_budget_is_used_up(): void
+    {
+        $this->configureBakong(['services.bakong.daily_check_limit' => 2]);
+
+        Http::fake([
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::response([
+                'responseCode' => 1,
+                'responseMessage' => 'Transaction not found',
+                'data' => null,
+            ]),
+        ]);
+
+        $service = new BakongService();
+
+        $service->checkTransactionByMd5('abc123');
+        $service->checkTransactionByMd5('abc123');
+        $service->checkTransactionByMd5('abc123');
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_check_transaction_by_md5_returns_null_instead_of_throwing_on_dns_failure(): void
+    {
+        $this->configureBakong();
+
+        Http::fake([
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::failedConnection('cURL error 6: Could not resolve host'),
+        ]);
+
+        $service = new BakongService();
+
+        $result = $service->checkTransactionByMd5('abc123');
+
+        $this->assertNull($result);
+    }
+
+    public function test_check_transaction_by_md5_ignores_budget_when_limit_is_zero(): void
+    {
+        $this->configureBakong(['services.bakong.daily_check_limit' => 0]);
+
+        Http::fake([
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::response([
+                'responseCode' => 1,
+                'responseMessage' => 'Transaction not found',
+                'data' => null,
+            ]),
+        ]);
+
+        $service = new BakongService();
+
+        $service->checkTransactionByMd5('abc123');
+        $service->checkTransactionByMd5('abc123');
+        $service->checkTransactionByMd5('abc123');
+
+        Http::assertSentCount(3);
     }
 }

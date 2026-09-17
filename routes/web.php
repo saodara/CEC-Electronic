@@ -31,15 +31,18 @@ Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout.c
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/success/{order}', [CheckoutController::class, 'success'])->name('checkout.success');
 Route::get('/checkout/payment-status/{order}', [CheckoutController::class, 'paymentStatus'])->name('checkout.payment-status');
-Route::post('/webhooks/bakong', [CheckoutController::class, 'webhook'])
-    ->name('bakong.webhook')
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
 
 Route::get('/login', [CustomerAuthController::class, 'login'])->name('customer.login');
-Route::post('/login', [CustomerAuthController::class, 'authenticate'])->name('customer.login.store');
+Route::post('/login', [CustomerAuthController::class, 'authenticate'])
+    ->name('customer.login.store')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
 Route::get('/register', [CustomerAuthController::class, 'register'])->name('customer.register');
-Route::post('/register', [CustomerAuthController::class, 'store'])->name('customer.register.store');
-Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('customer.logout');
+Route::post('/register', [CustomerAuthController::class, 'store'])
+    ->name('customer.register.store')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
+Route::post('/logout', [CustomerAuthController::class, 'logout'])
+    ->name('customer.logout')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
 
 Route::prefix('account')->name('account.')->group(function () {
     Route::get('/', [AccountController::class, 'dashboard'])->name('dashboard');
@@ -48,14 +51,19 @@ Route::prefix('account')->name('account.')->group(function () {
 });
 
 Route::get('/admin/login', [AdminAuthController::class, 'create'])->name('admin.login');
-Route::post('/admin/login', [AdminAuthController::class, 'store'])->name('admin.login.store');
-Route::post('/admin/logout', [AdminAuthController::class, 'destroy'])->name('admin.logout');
+Route::post('/admin/login', [AdminAuthController::class, 'store'])
+    ->name('admin.login.store')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
+Route::post('/admin/logout', [AdminAuthController::class, 'destroy'])
+    ->name('admin.logout')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
 
 Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAdminSession::class)->group(function () {
     Route::get('/', [AdminProductController::class, 'dashboard'])->name('dashboard');
     Route::resource('products', AdminProductController::class);
     Route::resource('categories', AdminCategoryController::class)->except(['show']);
     Route::resource('orders', AdminOrderController::class)->only(['index', 'show', 'update']);
+    Route::post('orders/{order}/verify-payment', [AdminOrderController::class, 'verifyPayment'])->name('orders.verify-payment');
     Route::get('customers', [AdminCustomerController::class, 'index'])->name('customers.index');
     Route::get('customers/{phone}', [AdminCustomerController::class, 'show'])->name('customers.show');
     Route::resource('suppliers', AdminSupplierController::class)->except(['show']);

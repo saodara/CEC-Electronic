@@ -3,47 +3,50 @@
 namespace App\Services;
 
 use App\Models\Order;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class BakongService
 {
     private string $baseUrl;
-    private string $accountId;
-    private string $token;
-    private string $merchantName;
+    private string $accountUsername;
+    private string $accountName;
+    private string $accessToken;
     private string $merchantCity;
+    private int $dailyCheckLimit;
 
     public function __construct()
     {
-        $this->baseUrl      = rtrim((string) config('services.bakong.relay_url', ''), '/');
-        $this->accountId    = (string) config('services.bakong.account_id', '');
-        $this->token        = (string) config('services.bakong.token', '');
-        $this->merchantName = (string) config('services.bakong.merchant_name', 'CEC Electronic');
-        $this->merchantCity = (string) config('services.bakong.merchant_city', 'Phnom Penh');
+        $this->baseUrl         = rtrim((string) config('services.bakong.base_url', ''), '/');
+        $this->accountUsername = (string) config('services.bakong.account_username', '');
+        $this->accountName     = (string) config('services.bakong.account_name', 'CEC Electronic');
+        $this->accessToken     = (string) config('services.bakong.access_token', '');
+        $this->merchantCity    = (string) config('services.bakong.merchant_city', 'Phnom Penh');
+        $this->dailyCheckLimit = (int) config('services.bakong.daily_check_limit', 90);
     }
 
     public function isConfigured(): bool
     {
-        return $this->accountId !== '';
+        return $this->accountUsername !== '';
     }
 
     private function http(): PendingRequest
     {
-        $client = Http::timeout(15)->acceptJson();
-
-        if ($this->token !== '') {
-            $client = $client->withToken($this->token);
-        }
-
-        return $client;
+        // DNS to Bakong's API intermittently fails to resolve inside this
+        // network — retry a couple of times before giving up on a single check.
+        // throw: false keeps a plain non-2xx response (e.g. "not found") as a
+        // normal response object instead of turning it into an exception —
+        // only connection-level failures (DNS, timeout) should be retried/thrown.
+        return Http::timeout(15)->retry(3, 500, throw: false)->acceptJson()->withToken($this->accessToken);
     }
 
     /**
-     * Generate a fixed-amount KHQR string for an order using the local KHQR generator.
-     * No relay API call needed — format follows the official NBC KHQR SDK spec.
-     * Returns ['qr' => string, 'md5' => string] or null if account ID is not set.
+     * Generate a fixed-amount KHQR string for an order — computed locally
+     * following the NBC KHQR SDK spec, no API call needed.
+     * Returns ['qr' => string, 'md5' => string] or null if not configured.
      */
     public function generateQrForOrder(Order $order): ?array
     {
@@ -52,8 +55,8 @@ class BakongService
         }
 
         return KhqrGenerator::individual(
-            accountId:      $this->accountId,
-            merchantName:   $this->merchantName,
+            accountId:      $this->accountUsername,
+            merchantName:   $this->accountName,
             merchantCity:   $this->merchantCity,
             amount:         (float) $order->grand_total,
             currency:       'USD',
@@ -63,77 +66,49 @@ class BakongService
     }
 
     /**
-     * Convert a raw KHQR string into a Base64 PNG image (data:image/png;base64,…).
+     * Verify a payment against the official Bakong Open API using the MD5
+     * hash of the KHQR string. Returns the transaction data once paid, or
+     * null while unpaid / not yet found.
+     *
+     * Bakong caps this endpoint at a small number of requests per day for
+     * the whole account. A shared daily counter guards every caller (live
+     * customer polling and the background job alike) so the app can never
+     * exceed that cap and get every pending order stuck until it resets.
      */
-    public function generateImage(string $qr): ?string
-    {
-        if (! $this->baseUrl) {
-            return null;
-        }
-
-        $response = $this->http()->post("{$this->baseUrl}/v1/generate_khqr_image", [
-            'qr' => $qr,
-        ]);
-
-        if (! $response->successful() || $response->json('responseCode') !== 0) {
-            return null;
-        }
-
-        return $response->json('data.image');
-    }
-
     /**
-     * Create a hosted web checkout session with a fixed amount.
-     * Returns the session data array (session_id, checkout_url) or null on failure.
+     * $enforceBudget can be set false for a deliberate, human-initiated check
+     * (e.g. an admin clicking "verify now" on one order) — those are
+     * naturally rate-limited by a person clicking a button, unlike automated
+     * polling, so they're allowed past the shared daily cap that protects
+     * against runaway automated usage. The check still counts toward the
+     * shared counter so automated callers see accurate usage.
      */
-    public function createWebCheckout(Order $order, string $returnUrl, string $webhookUrl): ?array
+    public function checkTransactionByMd5(string $md5, bool $enforceBudget = true): ?array
     {
-        if (! $this->isConfigured()) {
+        if ($this->baseUrl === '' || $this->accessToken === '') {
             return null;
         }
 
-        $response = $this->http()->post("{$this->baseUrl}/v1/web_checkouts/create", [
-            'trans_id'   => $order->order_number,
-            'req_custom' => [
-                'lang' => 'km',
-                'ttl'  => 60,
-            ],
-            'req_khqr' => [
-                'account_id'    => $this->accountId,
-                'merchant_name' => $this->merchantName,
-                'merchant_city' => $this->merchantCity,
-                'amount'        => (float) $order->grand_total,
-                'currency'      => 'USD',
-            ],
-            'req_url' => [
-                'return_url'  => $returnUrl,
-                'webhook_url' => $webhookUrl,
-            ],
-        ]);
+        if ($enforceBudget && $this->dailyBudgetExceeded()) {
+            return null;
+        }
 
-        if (! $response->successful() || $response->json('responseCode') !== 0) {
-            Log::warning('Bakong web checkout creation failed', [
-                'order'    => $order->order_number,
-                'response' => $response->json(),
+        $this->recordDailyCheck();
+
+        try {
+            $response = $this->http()->post("{$this->baseUrl}/check_transaction_by_md5", [
+                'md5' => $md5,
             ]);
+        } catch (ConnectionException $e) {
+            // Network/DNS hiccup reaching Bakong — treat as "not confirmed yet"
+            // rather than blowing up the request; the next poll/job run retries.
+            Log::warning('Bakong check_transaction_by_md5 connection failed', [
+                'md5' => $md5,
+                'message' => $e->getMessage(),
+            ]);
+
             return null;
         }
-
-        return $response->json('data');
-    }
-
-    /**
-     * Fetch the current status of a web checkout session.
-     */
-    public function getCheckoutDetails(string $sessionId): ?array
-    {
-        if (! $this->baseUrl) {
-            return null;
-        }
-
-        $response = $this->http()->post("{$this->baseUrl}/v1/web_checkouts/details", [
-            'session_id' => $sessionId,
-        ]);
 
         if (! $response->successful() || $response->json('responseCode') !== 0) {
             return null;
@@ -142,23 +117,25 @@ class BakongService
         return $response->json('data');
     }
 
-    /**
-     * Check a transaction by MD5 hash (from QR generation).
-     */
-    public function checkTransactionByMd5(string $md5): ?array
+    private function dailyBudgetExceeded(): bool
     {
-        if (! $this->baseUrl) {
-            return null;
+        if ($this->dailyCheckLimit <= 0) {
+            return false;
         }
 
-        $response = $this->http()->post("{$this->baseUrl}/v1/check_transaction_by_md5", [
-            'md5' => $md5,
-        ]);
+        return (int) Cache::get($this->dailyBudgetKey(), 0) >= $this->dailyCheckLimit;
+    }
 
-        if (! $response->successful() || $response->json('responseCode') !== 0) {
-            return null;
-        }
+    private function recordDailyCheck(): void
+    {
+        $key = $this->dailyBudgetKey();
 
-        return $response->json('data');
+        Cache::add($key, 0, now()->endOfDay()->addSecond());
+        Cache::increment($key);
+    }
+
+    private function dailyBudgetKey(): string
+    {
+        return 'bakong:daily-checks:' . now()->toDateString();
     }
 }

@@ -28,6 +28,21 @@
                 </tr>
             </thead>
             <tbody>
+                @php
+                    $statusClasses = [
+                        'pending' => 'orange',
+                        'processing' => 'info',
+                        'shipped' => 'info',
+                        'completed' => '',
+                        'cancelled' => 'danger',
+                    ];
+                    $paymentClasses = [
+                        'unpaid' => 'danger',
+                        'paid' => 'success',
+                        'refunded' => 'info',
+                        'failed' => 'danger',
+                    ];
+                @endphp
                 @forelse($orders as $order)
                     <tr>
                         <td>
@@ -38,10 +53,10 @@
                             <div class="muted">{{ $order->items_count }} items</div>
                         </td>
                         <td>{{ $order->customer_name }}<div class="muted">{{ $order->customer_phone }}</div></td>
-                        <td><span class="status">{{ ucfirst($order->status) }}</span></td>
+                        <td><span class="status {{ $statusClasses[$order->status] ?? '' }}">{{ ucfirst($order->status) }}</span></td>
                         <td>{{ $order->deliveryProvider?->name ?: 'Unassigned' }}<div class="muted">{{ $order->tracking_number }}</div></td>
                         <td>
-                            {{ ucfirst($order->payment_status) }}
+                            <span class="status-text {{ $paymentClasses[$order->payment_status] ?? '' }}">{{ ucfirst($order->payment_status) }}</span>
                             <div class="muted">{{ strtoupper(str_replace('_', ' ', $order->payment_method)) }}</div>
                         </td>
                         <td>${{ number_format($order->grand_total, 2) }}</td>

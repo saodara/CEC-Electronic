@@ -58,13 +58,14 @@ class CheckoutServiceTest extends TestCase
             ->assertRedirect(route('customer.login'));
     }
 
-    public function test_store_aborts_with_422_when_cart_is_empty(): void
+    public function test_store_redirects_to_cart_when_cart_is_empty(): void
     {
         $user = User::factory()->create();
 
         $this->actingAs($user)
             ->post(route('checkout.store'), $this->validCheckoutPayload())
-            ->assertStatus(422);
+            ->assertRedirect(route('shop.cart'))
+            ->assertSessionHas('status', 'Your cart is empty.');
 
         $this->assertDatabaseCount('orders', 0);
     }
@@ -118,6 +119,34 @@ class CheckoutServiceTest extends TestCase
         $this->assertDatabaseMissing('cart_items', ['id' => $cartItem->id]);
     }
 
+    public function test_double_submitting_place_order_does_not_crash_on_the_second_request(): void
+    {
+        $user = User::factory()->create();
+        $product = Product::factory()->create();
+
+        $this->makeCartItem([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'unit_price' => 10.00,
+        ]);
+
+        // First submission succeeds and clears the cart, same as a real "Place
+        // order" click. A double-click, back-button resubmit, or slow-network
+        // retry sends a second identical request against the now-empty cart —
+        // that must fail soft, not crash with a 422 error page.
+        $this->actingAs($user)
+            ->post(route('checkout.store'), $this->validCheckoutPayload())
+            ->assertRedirect();
+
+        $this->actingAs($user)
+            ->post(route('checkout.store'), $this->validCheckoutPayload())
+            ->assertRedirect(route('shop.cart'))
+            ->assertSessionHas('status', 'Your cart is empty.');
+
+        $this->assertDatabaseCount('orders', 1);
+    }
+
     public function test_store_defaults_customer_email_to_user_email_when_not_provided(): void
     {
         $user = User::factory()->create(['email' => 'user-account@example.com']);
@@ -142,15 +171,9 @@ class CheckoutServiceTest extends TestCase
     public function test_store_generates_bakong_qr_when_payment_method_is_bakong(): void
     {
         config([
-            'services.bakong.account_id' => '855012345678',
-            'services.bakong.relay_url' => 'https://relay.test',
-        ]);
-
-        Http::fake([
-            'https://relay.test/v1/web_checkouts/create' => Http::response([
-                'responseCode' => 0,
-                'data' => ['session_id' => 'sess-abc', 'checkout_url' => 'https://relay.test/checkout/sess-abc'],
-            ]),
+            'services.bakong.account_username' => '855012345678',
+            'services.bakong.base_url' => 'https://api-bakong.test/v1',
+            'services.bakong.access_token' => 'test-token',
         ]);
 
         $user = User::factory()->create();
@@ -170,8 +193,6 @@ class CheckoutServiceTest extends TestCase
         $order = Order::first();
         $this->assertNotNull($order->bakong_qr_string);
         $this->assertNotNull($order->bakong_qr_md5);
-        $this->assertSame('sess-abc', $order->bakong_session_id);
-        $this->assertSame('https://relay.test/checkout/sess-abc', $order->bakong_checkout_url);
     }
 
     public function test_store_validation_fails_when_required_fields_are_missing(): void
@@ -254,12 +275,15 @@ class CheckoutServiceTest extends TestCase
 
     public function test_payment_status_updates_order_when_bakong_reports_paid(): void
     {
-        config(['services.bakong.relay_url' => 'https://relay.test']);
+        config([
+            'services.bakong.base_url' => 'https://api-bakong.test/v1',
+            'services.bakong.access_token' => 'test-token',
+        ]);
 
         Http::fake([
-            'https://relay.test/v1/web_checkouts/details' => Http::response([
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::response([
                 'responseCode' => 0,
-                'data' => ['status' => 'PAID'],
+                'data' => ['hash' => 'md5-xyz'],
             ]),
         ]);
 
@@ -267,7 +291,7 @@ class CheckoutServiceTest extends TestCase
         $order = $this->makeOrder([
             'user_id' => $user->id,
             'payment_status' => 'unpaid',
-            'bakong_session_id' => 'sess-xyz',
+            'bakong_qr_md5' => 'md5-xyz',
         ]);
 
         $response = $this->actingAs($user)
@@ -285,12 +309,15 @@ class CheckoutServiceTest extends TestCase
 
     public function test_payment_status_stays_unpaid_when_bakong_reports_not_paid(): void
     {
-        config(['services.bakong.relay_url' => 'https://relay.test']);
+        config([
+            'services.bakong.base_url' => 'https://api-bakong.test/v1',
+            'services.bakong.access_token' => 'test-token',
+        ]);
 
         Http::fake([
-            'https://relay.test/v1/web_checkouts/details' => Http::response([
-                'responseCode' => 0,
-                'data' => ['status' => 'UNPAID'],
+            'https://api-bakong.test/v1/check_transaction_by_md5' => Http::response([
+                'responseCode' => 1,
+                'data' => null,
             ]),
         ]);
 
@@ -298,7 +325,7 @@ class CheckoutServiceTest extends TestCase
         $order = $this->makeOrder([
             'user_id' => $user->id,
             'payment_status' => 'unpaid',
-            'bakong_session_id' => 'sess-xyz',
+            'bakong_qr_md5' => 'md5-xyz',
         ]);
 
         $this->actingAs($user)
@@ -310,64 +337,5 @@ class CheckoutServiceTest extends TestCase
             ]);
 
         $this->assertSame('unpaid', $order->refresh()->payment_status);
-    }
-
-    public function test_webhook_returns_422_when_session_id_is_missing(): void
-    {
-        $this->postJson(route('bakong.webhook'), [])
-            ->assertStatus(422)
-            ->assertJson(['ok' => false]);
-    }
-
-    public function test_webhook_no_ops_for_unknown_session_id(): void
-    {
-        Http::fake();
-
-        $this->postJson(route('bakong.webhook'), ['session_id' => 'does-not-exist'])
-            ->assertOk()
-            ->assertJson(['ok' => true]);
-
-        Http::assertNothingSent();
-    }
-
-    public function test_webhook_marks_order_paid_when_bakong_confirms_paid(): void
-    {
-        config(['services.bakong.relay_url' => 'https://relay.test']);
-
-        Http::fake([
-            'https://relay.test/v1/web_checkouts/details' => Http::response([
-                'responseCode' => 0,
-                'data' => ['status' => 'PAID'],
-            ]),
-        ]);
-
-        $order = $this->makeOrder([
-            'payment_status' => 'unpaid',
-            'bakong_session_id' => 'sess-webhook-1',
-        ]);
-
-        $this->postJson(route('bakong.webhook'), ['session_id' => 'sess-webhook-1'])
-            ->assertOk()
-            ->assertJson(['ok' => true]);
-
-        $order->refresh();
-        $this->assertSame('paid', $order->payment_status);
-        $this->assertNotNull($order->payment_confirmed_at);
-    }
-
-    public function test_webhook_early_returns_for_already_paid_order_without_calling_bakong(): void
-    {
-        Http::fake();
-
-        $order = $this->makeOrder([
-            'payment_status' => 'paid',
-            'bakong_session_id' => 'sess-webhook-2',
-        ]);
-
-        $this->postJson(route('bakong.webhook'), ['session_id' => 'sess-webhook-2'])
-            ->assertOk()
-            ->assertJson(['ok' => true]);
-
-        Http::assertNothingSent();
     }
 }
