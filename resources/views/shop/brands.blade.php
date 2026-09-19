@@ -36,16 +36,16 @@
 
     <section class="brand-grid">
         @foreach($brands as $brand)
-            <a class="panel brand-card" href="{{ route('shop.brand', $brand['slug']) }}">
+            <a class="panel brand-card" href="{{ route('shop.brand', $brand->slug) }}">
                 <span class="brand-logo-box">
-                    @if($brand['logo'])
-                        <img src="{{ asset($brand['logo']) }}" alt="{{ $brand['name'] }} logo">
+                    @if($brand->logo_url)
+                        <img src="{{ $brand->logo_url }}" alt="{{ $brand->name }} logo">
                     @else
-                        <span class="brand-initials">{{ $brand['initials'] }}</span>
+                        <span class="brand-initials">{{ $brand->initials }}</span>
                     @endif
                 </span>
-                <strong>{{ $brand['name'] }}</strong>
-                <span>{{ $brand['products_count'] }} products</span>
+                <strong>{{ $brand->name }}</strong>
+                <span>{{ $brand->products_count }} products</span>
             </a>
         @endforeach
     </section>

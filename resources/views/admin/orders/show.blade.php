@@ -9,7 +9,12 @@
             <h2 style="margin:0">{{ $order->order_number }}</h2>
             <p class="muted" style="margin:6px 0 0">Placed {{ $order->placed_at?->format('M d, Y h:i A') ?? $order->created_at->format('M d, Y h:i A') }}</p>
         </div>
-        <a class="btn secondary" href="{{ route('admin.orders.index') }}">Back to orders</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            @if($order->payment_status === 'paid')
+                <a class="btn" href="{{ route('admin.orders.receipt', $order) }}">Download receipt</a>
+            @endif
+            <a class="btn secondary" href="{{ route('admin.orders.index') }}">Back to orders</a>
+        </div>
     </div>
 
     <section style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px">

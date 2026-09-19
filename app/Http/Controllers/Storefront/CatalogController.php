@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class CatalogController extends Controller
@@ -23,8 +23,7 @@ class CatalogController extends Controller
 
     /**
      * Products don't have dedicated processor/RAM/storage columns, so these
-     * facets are matched against the name/description text, the same way
-     * brand matching already works in brandCollection().
+     * facets are matched against the name/description text.
      */
     private const PROCESSOR_KEYWORDS = [
         'Intel Core' => ['intel', 'core i'],
@@ -93,6 +92,7 @@ class CatalogController extends Controller
                     $query->where('category', $slug);
                 }
 
+                $this->applyBrandFilter($query, $request);
                 $this->applyFacetFilters($query, $request);
 
                 return [
@@ -105,9 +105,11 @@ class CatalogController extends Controller
         );
 
         $categories = $this->activeCategories();
+        $brands = $this->activeBrands();
         $selectedCategories = $request->query('category', [$slug]);
+        $selectedBrands = (array) $request->query('brand', []);
 
-        return view('shop.category', compact('categoryName', 'products', 'categories', 'selectedCategories'));
+        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
     }
 
     public function product(string $slug): View
@@ -141,6 +143,7 @@ class CatalogController extends Controller
                     });
 
                 $this->applyCategoryFilter($builder, $request);
+                $this->applyBrandFilter($builder, $request);
                 $this->applyFacetFilters($builder, $request);
 
                 return $builder->latest()->get();
@@ -149,49 +152,69 @@ class CatalogController extends Controller
         );
 
         $categories = $this->activeCategories();
+        $brands = $this->activeBrands();
         $selectedCategories = $request->query('category', []);
+        $selectedBrands = (array) $request->query('brand', []);
 
-        return view('shop.category', compact('categoryName', 'products', 'categories', 'selectedCategories'));
+        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
     }
 
     public function brands(): View
     {
-        $brands = $this->brandCollection();
+        $brands = $this->cacheRemember(
+            'catalog.brands.list',
+            fn () => Brand::query()
+                ->active()
+                ->ordered()
+                ->withCount(['products' => fn ($query) => $query->where('is_active', true)])
+                ->get(),
+            fn ($v) => $v instanceof Collection
+        );
 
         return view('shop.brands', compact('brands'));
     }
 
     public function brand(string $slug, Request $request): View
     {
-        $brand = $this->brandCollection()->firstWhere('slug', $slug);
-
-        abort_if(! $brand, 404);
-
-        $categoryName = $brand['name'] . ' Products';
         $filterKey = $this->filterCacheKey($request);
 
-        $products = $this->cacheRemember(
+        ['brandName' => $brandName, 'products' => $products] = $this->cacheRemember(
             "catalog.brand.{$slug}.{$filterKey}",
-            function () use ($brand, $request) {
-                $builder = Product::query()
-                    ->where('is_active', true)
-                    ->where(function ($query) use ($brand) {
-                        $query->where('name', 'like', '%' . $brand['name'] . '%')
-                            ->orWhere('description', 'like', '%' . $brand['name'] . '%');
-                    });
+            function () use ($slug, $request) {
+                $brand = Brand::query()->active()->where('slug', $slug)->first();
+
+                if (! $brand) {
+                    return ['brandName' => null, 'products' => new Collection()];
+                }
+
+                $builder = Product::query()->where('is_active', true);
+
+                if ($request->query('brand') !== null) {
+                    // Sidebar brand checkboxes were submitted; they fully control which brands show.
+                    $this->applyBrandFilter($builder, $request);
+                } else {
+                    $builder->where('brand_id', $brand->id);
+                }
 
                 $this->applyCategoryFilter($builder, $request);
                 $this->applyFacetFilters($builder, $request);
 
-                return $builder->latest()->get();
+                return ['brandName' => $brand->name, 'products' => $builder->latest()->get()];
             },
-            fn ($v) => $v instanceof Collection
+            fn ($v) => is_array($v) && array_key_exists('brandName', $v)
+                && ($v['brandName'] === null || is_string($v['brandName']))
+                && ($v['products'] ?? null) instanceof Collection
         );
 
-        $categories = $this->activeCategories();
-        $selectedCategories = $request->query('category', []);
+        abort_if($brandName === null, 404);
 
-        return view('shop.category', compact('categoryName', 'products', 'categories', 'selectedCategories'));
+        $categoryName = $brandName . ' Products';
+        $categories = $this->activeCategories();
+        $brands = $this->activeBrands();
+        $selectedCategories = $request->query('category', []);
+        $selectedBrands = (array) $request->query('brand', [$slug]);
+
+        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
     }
 
     private function applyCategoryFilter(Builder $query, Request $request): void
@@ -200,6 +223,15 @@ class CatalogController extends Controller
 
         if ($categorySlugs) {
             $query->whereHas('categoryRelation', fn ($q) => $q->whereIn('slug', $categorySlugs));
+        }
+    }
+
+    private function applyBrandFilter(Builder $query, Request $request): void
+    {
+        $brandSlugs = (array) $request->query('brand', []);
+
+        if ($brandSlugs) {
+            $query->whereHas('brand', fn ($q) => $q->whereIn('slug', $brandSlugs));
         }
     }
 
@@ -263,7 +295,7 @@ class CatalogController extends Controller
      */
     private function filterCacheKey(Request $request): string
     {
-        $relevant = collect(['processor', 'ram', 'storage', 'price', 'category'])
+        $relevant = collect(['processor', 'ram', 'storage', 'price', 'category', 'brand'])
             ->mapWithKeys(fn ($key) => [
                 $key => collect((array) $request->query($key, []))->sort()->values()->all(),
             ])
@@ -283,32 +315,11 @@ class CatalogController extends Controller
         );
     }
 
-    private function brandCollection(): Collection
+    private function activeBrands(): Collection
     {
         return $this->cacheRemember(
-            'catalog.brands',
-            function () {
-                // Fetch active products once and match brands in memory instead of
-                // running one COUNT query per brand (was N+1, one round trip per brand).
-                $products = Product::query()
-                    ->where('is_active', true)
-                    ->get(['name', 'description']);
-
-                return collect(config('brands'))
-                    ->map(function (array $brand) use ($products) {
-                        $count = $products->filter(
-                            fn (Product $product) => Str::contains($product->name, $brand['name'], ignoreCase: true)
-                                || Str::contains((string) $product->description, $brand['name'], ignoreCase: true)
-                        )->count();
-
-                        return $brand + [
-                            'initials' => Str::of($brand['name'])->substr(0, 2)->upper()->toString(),
-                            'products_count' => $count,
-                        ];
-                    })
-                    ->sortBy('name')
-                    ->values();
-            },
+            'catalog.brands.active',
+            fn () => Brand::query()->active()->ordered()->get(['id', 'name', 'slug']),
             fn ($v) => $v instanceof Collection
         );
     }

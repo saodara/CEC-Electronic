@@ -130,6 +130,7 @@ return [
         \Illuminate\Database\Eloquent\Collection::class,
         \App\Models\Product::class,
         \App\Models\Category::class,
+        \App\Models\Brand::class,
         \stdClass::class,
     ],
 

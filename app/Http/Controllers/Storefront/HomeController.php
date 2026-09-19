@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Support\Collection;
@@ -29,6 +30,7 @@ class HomeController extends Controller
 
             return [
                 'categories' => $categories,
+                'brands' => Brand::query()->active()->ordered()->whereNotNull('logo')->get(),
                 'products' => Product::query()
                     ->where('is_active', true)
                     ->latest()
@@ -49,6 +51,7 @@ class HomeController extends Controller
 
         $isValid = fn ($v) => is_array($v)
             && ($v['categories'] ?? null) instanceof Collection
+            && ($v['brands'] ?? null) instanceof Collection
             && ($v['products'] ?? null) instanceof Collection;
 
         if ($cached !== null && $isValid($cached)) {
@@ -63,8 +66,8 @@ class HomeController extends Controller
             }
         }
 
-        ['categories' => $categories, 'products' => $products] = $data;
+        ['categories' => $categories, 'brands' => $brands, 'products' => $products] = $data;
 
-        return view('shop.home', compact('categories', 'products'));
+        return view('shop.home', compact('categories', 'brands', 'products'));
     }
 }

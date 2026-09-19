@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
@@ -47,13 +48,21 @@ class ProductController extends Controller
 
     public function index(Request $request): View|JsonResponse
     {
-        $products = Product::query()->with(['categoryRelation', 'supplier'])->latest()->paginate(10);
+        $brands = Brand::query()->orderBy('name')->get(['id', 'name']);
+        $selectedBrand = $request->integer('brand') ?: null;
+
+        $products = Product::query()
+            ->with(['categoryRelation', 'brand', 'supplier'])
+            ->when($selectedBrand, fn ($query) => $query->where('brand_id', $selectedBrand))
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
 
         if ($request->wantsJson()) {
             return response()->json($products);
         }
 
-        return view('admin.products.index', compact('products'));
+        return view('admin.products.index', compact('products', 'brands', 'selectedBrand'));
     }
 
     public function show(Product $product): JsonResponse
@@ -65,9 +74,10 @@ class ProductController extends Controller
     {
         $product = new Product();
         $categories = Category::query()->orderBy('name')->get();
+        $brands = Brand::query()->orderBy('name')->get();
         $suppliers = Supplier::query()->where('is_active', true)->orderBy('name')->get();
 
-        return view('admin.products.create', compact('product', 'categories', 'suppliers'));
+        return view('admin.products.create', compact('product', 'categories', 'brands', 'suppliers'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -84,9 +94,10 @@ class ProductController extends Controller
     public function edit(Product $product): View
     {
         $categories = Category::query()->orderBy('name')->get();
+        $brands = Brand::query()->orderBy('name')->get();
         $suppliers = Supplier::query()->where('is_active', true)->orderBy('name')->get();
 
-        return view('admin.products.edit', compact('product', 'categories', 'suppliers'));
+        return view('admin.products.edit', compact('product', 'categories', 'brands', 'suppliers'));
     }
 
     public function update(Request $request, Product $product): RedirectResponse
@@ -115,6 +126,7 @@ class ProductController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'category_id' => ['nullable', 'exists:categories,id'],
+            'brand_id' => ['nullable', 'exists:brands,id'],
             'supplier_id' => ['nullable', 'exists:suppliers,id'],
             'price' => ['required', 'numeric', 'min:0.01'],
             'compare_at_price' => ['nullable', 'numeric', 'min:0.01'],
@@ -123,7 +135,7 @@ class ProductController extends Controller
             'sku' => ['nullable', 'string', 'max:120', Rule::unique('products', 'sku')->ignore($product?->id)],
             'is_active' => ['nullable', 'boolean'],
             'is_featured' => ['nullable', 'boolean'],
-            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,gif,bmp,webp,svg,ico', 'max:4096'],
             'category' => ['nullable', 'string', 'max:80'],
         ]) + [
             'stock_quantity' => 0,

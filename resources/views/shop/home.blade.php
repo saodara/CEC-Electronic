@@ -4,7 +4,6 @@
 
 @section('content')
     @php
-        $brands = collect(config('brands'))->filter(fn ($brand) => $brand['logo'])->values();
         $categoryTiles = [
             ['slug' => 'laptops', 'name' => 'Laptops', 'copy' => 'Business, student, creator, and gaming notebooks.', 'image' => 'MSFT-All-in-One_1040x585.avif'],
             ['slug' => 'desktops', 'name' => 'Desktop PC', 'copy' => 'Ready office PCs and custom build quotation.', 'image' => 'desktop-pc.webp'],
@@ -52,8 +51,8 @@
         <div class="brand-slider-wrap">
             <div class="brand-slider is-marquee" data-brand-slider>
                 @foreach($brands->concat($brands) as $brand)
-                    <a class="brand-slide" href="{{ route('shop.brand', $brand['slug']) }}" aria-label="View {{ $brand['name'] }} products">
-                        <img src="{{ asset($brand['logo']) }}" alt="{{ $brand['name'] }} logo">
+                    <a class="brand-slide" href="{{ route('shop.brand', $brand->slug) }}" aria-label="View {{ $brand->name }} products">
+                        <img src="{{ $brand->logo_url }}" alt="{{ $brand->name }} logo">
                     </a>
                 @endforeach
             </div>

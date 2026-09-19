@@ -4,7 +4,6 @@
 
 @section('content')
     @php
-        $brands = config('brands');
         $filterGroups = [
             'processor' => ['label' => 'Processor', 'options' => ['Intel Core','AMD Ryzen','Apple M series']],
             'ram' => ['label' => 'RAM Size', 'options' => ['8GB','16GB','32GB','64GB']],
@@ -17,6 +16,7 @@
             'storage' => (array) request()->query('storage', []),
             'price' => (array) request()->query('price', []),
             'category' => (array) ($selectedCategories ?? []),
+            'brand' => (array) ($selectedBrands ?? []),
         ];
     @endphp
 
@@ -31,7 +31,7 @@
     <div class="brand-strip">
         <a class="brand-pill" href="{{ route('shop.brands') }}">All Brands</a>
         @foreach($brands as $brand)
-            <a class="brand-pill" href="{{ route('shop.brand', $brand['slug']) }}">{{ $brand['name'] }}</a>
+            <a class="brand-pill" href="{{ route('shop.brand', $brand->slug) }}">{{ $brand->name }}</a>
         @endforeach
     </div>
 
@@ -53,6 +53,17 @@
                         @empty
                             <label><input type="checkbox" checked disabled> {{ $categoryName }}</label>
                         @endforelse
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <div class="filter-title"><span>Brand</span><span>-</span></div>
+                    <div class="checks">
+                        @foreach($brands ?? [] as $brand)
+                            <label>
+                                <input type="checkbox" name="brand[]" value="{{ $brand->slug }}"
+                                    @checked(in_array($brand->slug, $selected['brand']))> {{ $brand->name }}
+                            </label>
+                        @endforeach
                     </div>
                 </div>
                 <div class="filter-group">

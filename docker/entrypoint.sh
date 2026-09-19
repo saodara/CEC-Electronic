@@ -73,12 +73,15 @@ echo "Database is ready."
 echo "Running migrations..."
 php artisan migrate --force --no-interaction
 
-# Seed on first run only
-SEEDED_FLAG="$WORKDIR/storage/.docker_seeded"
-if [ ! -f "$SEEDED_FLAG" ]; then
-    echo "Seeding database..."
+# Seed only when the database itself is empty. A local flag file isn't
+# enough on hosts (e.g. Fly Machines) that rebuild the container's disk on
+# every deploy — that would re-run db:seed against a persistent external DB
+# on every deploy and clobber any admin edits, since the seeders use
+# updateOrCreate keyed by slug.
+PRODUCT_COUNT=$(php artisan tinker --execute="echo DB::table('products')->count();" 2>/dev/null | tail -1)
+if [ "${PRODUCT_COUNT:-0}" -eq 0 ] 2>/dev/null; then
+    echo "Seeding database (empty)..."
     php artisan db:seed --force --no-interaction
-    touch "$SEEDED_FLAG"
 fi
 
 # Pre-compile Blade views, routes, and config while still running as root.

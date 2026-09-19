@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +18,7 @@ class BakongService
     private string $accessToken;
     private string $merchantCity;
     private int $dailyCheckLimit;
+    private int $qrExpirySeconds;
 
     public function __construct()
     {
@@ -26,6 +28,7 @@ class BakongService
         $this->accessToken     = (string) config('services.bakong.access_token', '');
         $this->merchantCity    = (string) config('services.bakong.merchant_city', 'Phnom Penh');
         $this->dailyCheckLimit = (int) config('services.bakong.daily_check_limit', 90);
+        $this->qrExpirySeconds = max(1, (int) config('services.bakong.qr_expiry_seconds', 90));
     }
 
     public function isConfigured(): bool
@@ -46,7 +49,8 @@ class BakongService
     /**
      * Generate a fixed-amount KHQR string for an order — computed locally
      * following the NBC KHQR SDK spec, no API call needed.
-     * Returns ['qr' => string, 'md5' => string] or null if not configured.
+     * Returns ['qr' => string, 'md5' => string, 'expires_at' => Carbon] or null if not configured.
+     * The QR is only valid for services.bakong.qr_expiry_seconds (default 90).
      */
     public function generateQrForOrder(Order $order): ?array
     {
@@ -54,15 +58,21 @@ class BakongService
             return null;
         }
 
-        return KhqrGenerator::individual(
+        $qr = KhqrGenerator::individual(
             accountId:      $this->accountUsername,
             merchantName:   $this->accountName,
             merchantCity:   $this->merchantCity,
             amount:         (float) $order->grand_total,
             currency:       'USD',
             billNumber:     $order->order_number,
-            expirationDays: 1,
+            expirationSeconds: $this->qrExpirySeconds,
         );
+
+        return [
+            'qr'         => $qr['qr'],
+            'md5'        => $qr['md5'],
+            'expires_at' => Carbon::createFromTimestamp($qr['expires_at']),
+        ];
     }
 
     /**

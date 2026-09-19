@@ -8,7 +8,12 @@
             <h2>{{ $order->order_number }}</h2>
             <p>Placed {{ $order->created_at->format('M d, Y h:i A') }}</p>
         </div>
-        <a class="btn secondary" href="{{ route('account.orders') }}">Back to orders</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            @if($order->payment_status === 'paid')
+                <a class="btn" href="{{ route('account.orders.receipt', $order) }}">Download receipt</a>
+            @endif
+            <a class="btn secondary" href="{{ route('account.orders') }}">Back to orders</a>
+        </div>
     </div>
 
     <section class="checkout">

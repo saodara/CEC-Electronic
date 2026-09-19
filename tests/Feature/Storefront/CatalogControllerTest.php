@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Storefront;
 
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -159,9 +160,12 @@ class CatalogControllerTest extends TestCase
         $this->assertCount(3, $products);
     }
 
-    public function test_brands_page_lists_configured_brands_with_product_counts(): void
+    public function test_brands_page_lists_active_brands_with_active_product_counts(): void
     {
-        Product::factory()->create(['name' => 'Asus ROG Laptop', 'description' => 'gaming laptop', 'is_active' => true]);
+        $asus = Brand::factory()->create(['name' => 'Asus Test', 'slug' => 'asus-test']);
+        Brand::factory()->create(['is_active' => false, 'slug' => 'hidden-brand']);
+        Product::factory()->count(2)->create(['brand_id' => $asus->id, 'is_active' => true]);
+        Product::factory()->create(['brand_id' => $asus->id, 'is_active' => false]);
 
         $response = $this->get(route('shop.brands'));
 
@@ -169,32 +173,86 @@ class CatalogControllerTest extends TestCase
         $response->assertViewIs('shop.brands');
 
         $brands = $response->viewData('brands');
-        $asus = $brands->firstWhere('slug', 'asus');
+        $found = $brands->firstWhere('slug', 'asus-test');
 
-        $this->assertNotNull($asus);
-        $this->assertGreaterThanOrEqual(1, $asus['products_count']);
-        $this->assertSame(count(config('brands')), $brands->count());
+        $this->assertNotNull($found);
+        $this->assertSame(2, $found->products_count);
+        $this->assertNull($brands->firstWhere('slug', 'hidden-brand'));
     }
 
-    public function test_brand_page_shows_matching_products_for_a_valid_brand_slug(): void
+    public function test_brand_page_shows_only_products_assigned_to_that_brand(): void
     {
-        $match = Product::factory()->create(['name' => 'Dell XPS 15', 'is_active' => true]);
-        Product::factory()->create(['name' => 'Random Widget', 'description' => 'nothing brand related', 'is_active' => true]);
+        $dell = Brand::factory()->create(['name' => 'Dell Test', 'slug' => 'dell-test']);
+        $match = Product::factory()->create(['brand_id' => $dell->id, 'is_active' => true]);
+        // Mentions the brand but is not assigned to it: must not appear.
+        Product::factory()->create(['name' => 'Dell Test charger', 'brand_id' => null, 'is_active' => true]);
+        Product::factory()->create(['brand_id' => $dell->id, 'is_active' => false]);
 
-        $response = $this->get(route('shop.brand', 'dell'));
+        $response = $this->get(route('shop.brand', 'dell-test'));
 
         $response->assertOk();
         $response->assertViewIs('shop.category');
-        $response->assertViewHas('categoryName', 'Dell Products');
+        $response->assertViewHas('categoryName', 'Dell Test Products');
 
         $products = $response->viewData('products');
+        $this->assertCount(1, $products);
         $this->assertTrue($products->contains('id', $match->id));
     }
 
-    public function test_brand_page_404s_for_unknown_brand_slug(): void
+    public function test_brand_page_404s_for_unknown_or_inactive_brand_slug(): void
     {
-        $response = $this->get(route('shop.brand', 'not-a-real-brand'));
+        Brand::factory()->create(['slug' => 'gone', 'is_active' => false]);
 
-        $response->assertNotFound();
+        $this->get(route('shop.brand', 'not-a-real-brand'))->assertNotFound();
+        $this->get(route('shop.brand', 'gone'))->assertNotFound();
+    }
+
+    public function test_category_page_can_be_filtered_by_brand_checkboxes(): void
+    {
+        $category = Category::factory()->create(['name' => 'Laptops', 'slug' => 'laptops']);
+        $dell = Brand::factory()->create(['slug' => 'dell-test']);
+        $hp = Brand::factory()->create(['slug' => 'hp-test']);
+
+        $dellProduct = Product::factory()->create(['category_id' => $category->id, 'brand_id' => $dell->id]);
+        Product::factory()->create(['category_id' => $category->id, 'brand_id' => $hp->id]);
+        Product::factory()->create(['category_id' => $category->id, 'brand_id' => null]);
+
+        $response = $this->get(route('shop.category', ['slug' => 'laptops', 'brand' => ['dell-test']]));
+
+        $response->assertOk();
+        $products = $response->viewData('products');
+        $this->assertCount(1, $products);
+        $this->assertTrue($products->contains('id', $dellProduct->id));
+        $response->assertViewHas('selectedBrands', ['dell-test']);
+    }
+
+    public function test_search_can_be_filtered_by_brand(): void
+    {
+        $dell = Brand::factory()->create(['slug' => 'dell-test']);
+        $hp = Brand::factory()->create(['slug' => 'hp-test']);
+        $match = Product::factory()->create(['name' => 'Office laptop A', 'brand_id' => $dell->id]);
+        Product::factory()->create(['name' => 'Office laptop B', 'brand_id' => $hp->id]);
+
+        $response = $this->get(route('shop.search', ['q' => 'Office', 'brand' => ['dell-test']]));
+
+        $products = $response->viewData('products');
+        $this->assertCount(1, $products);
+        $this->assertTrue($products->contains('id', $match->id));
+    }
+
+    public function test_brand_filter_results_are_cached_separately_per_selection(): void
+    {
+        $category = Category::factory()->create(['slug' => 'laptops']);
+        $dell = Brand::factory()->create(['slug' => 'dell-test']);
+        $hp = Brand::factory()->create(['slug' => 'hp-test']);
+        Product::factory()->create(['category_id' => $category->id, 'brand_id' => $dell->id]);
+        Product::factory()->create(['category_id' => $category->id, 'brand_id' => $hp->id]);
+
+        $this->get(route('shop.category', ['slug' => 'laptops', 'brand' => ['dell-test']]))
+            ->assertViewHas('products', fn ($p) => $p->count() === 1);
+        $this->get(route('shop.category', ['slug' => 'laptops', 'brand' => ['hp-test']]))
+            ->assertViewHas('products', fn ($p) => $p->count() === 1 && $p->first()->brand_id === $hp->id);
+        $this->get(route('shop.category', 'laptops'))
+            ->assertViewHas('products', fn ($p) => $p->count() === 2);
     }
 }

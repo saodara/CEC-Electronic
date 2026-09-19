@@ -6,11 +6,20 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class Category extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        // See Product::booted() — same reasoning: no single cache key to
+        // target for the storefront's dynamic catalog cache keys.
+        static::saved(fn () => Cache::flush());
+        static::deleted(fn () => Cache::flush());
+    }
 
     protected $fillable = [
         'parent_id',

@@ -30,7 +30,7 @@ class KhqrGenerator
     /**
      * Generate a dynamic individual KHQR string with a fixed amount.
      *
-     * @return array{qr: string, md5: string}
+     * @return array{qr: string, md5: string, expires_at: int} expires_at is a unix timestamp (seconds)
      */
     public static function individual(
         string $accountId,
@@ -39,7 +39,7 @@ class KhqrGenerator
         float  $amount = 0,
         string $currency = 'USD',
         string $billNumber = '',
-        int    $expirationDays = 1
+        int    $expirationSeconds = 86400
     ): array {
         $currencyCode = strtoupper($currency) === 'KHR' ? '116' : '840';
 
@@ -53,7 +53,7 @@ class KhqrGenerator
 
         // Tag 99 — KHQR timestamps in milliseconds
         $nowMs = (int) (microtime(true) * 1000);
-        $expMs = $nowMs + ($expirationDays * 86_400_000);
+        $expMs = $nowMs + ($expirationSeconds * 1000);
         $timestamps = self::field('99',
             self::field('00', (string) $nowMs) .
             self::field('01', (string) $expMs)
@@ -85,6 +85,7 @@ class KhqrGenerator
         return [
             'qr'  => $qrFull,
             'md5' => md5($qrFull),
+            'expires_at' => intdiv($expMs, 1000),
         ];
     }
 }

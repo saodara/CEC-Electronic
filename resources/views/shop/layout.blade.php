@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'CEC Electronic')</title>
+    <link rel="icon" href="{{ asset('images/brand-logo.jpg') }}" type="image/jpeg">
     <style>
         :root{
             --brand:#0057a8;
@@ -264,6 +265,19 @@
         .footer .wrap{display:grid;grid-template-columns:1.3fr repeat(3,1fr);gap:22px;padding-top:28px}
         .footer h4{margin:0 0 10px;color:#fff}
         .footer p,.footer a{color:#bed1e7;line-height:1.7}
+        .cart-popup{display:none}
+        @media (max-width:640px){
+            .cart-popup{display:block;position:fixed;left:0;right:0;bottom:0;z-index:1200;padding:0 12px calc(12px + env(safe-area-inset-bottom));pointer-events:none;transform:translateY(120%);transition:transform .25s ease}
+            .cart-popup.is-open{transform:translateY(0);pointer-events:auto}
+            .cart-popup-card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 -6px 30px rgba(9,30,66,.22);padding:16px}
+            .cart-popup-head{display:flex;align-items:flex-start;gap:12px}
+            .cart-popup-check{flex:none;width:34px;height:34px;border-radius:50%;background:#ecfdf3;color:var(--success);display:grid;place-items:center;font-weight:900}
+            .cart-popup-text{flex:1;min-width:0}
+            .cart-popup-text strong{display:block;color:var(--ink)}
+            .cart-popup-text span{display:block;color:var(--muted);font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .cart-popup-close{flex:none;width:30px;height:30px;border:0;background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+            .cart-popup-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+        }
         @media (max-width:1120px){
             .header-inner{grid-template-columns:1fr;gap:10px;padding-top:14px;padding-bottom:14px}
             .quick-actions{justify-content:flex-start;overflow:auto}
@@ -422,6 +436,23 @@
             });
         })();
     </script>
+    <div class="cart-popup" data-cart-popup role="dialog" aria-label="Added to cart" aria-hidden="true">
+        <div class="cart-popup-card">
+            <div class="cart-popup-head">
+                <span class="cart-popup-check">&#10003;</span>
+                <div class="cart-popup-text">
+                    <strong>Added to cart</strong>
+                    <span data-cart-popup-detail></span>
+                </div>
+                <button type="button" class="cart-popup-close" data-cart-popup-close aria-label="Close">&times;</button>
+            </div>
+            <div class="cart-popup-actions">
+                <button type="button" class="btn secondary" data-cart-popup-close>Continue shopping</button>
+                <a class="btn" href="{{ route('shop.cart') }}">View cart</a>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function () {
             function csrfToken() {
@@ -456,6 +487,33 @@
                 });
             }
 
+            // Phone-only "added to cart" popup with a View cart button.
+            var cartPopup = document.querySelector('[data-cart-popup]');
+            var phoneQuery = window.matchMedia('(max-width: 640px)');
+            var cartPopupTimer;
+
+            function setCartPopup(open) {
+                if (! cartPopup) return;
+                cartPopup.classList.toggle('is-open', open);
+                cartPopup.setAttribute('aria-hidden', open ? 'false' : 'true');
+                window.clearTimeout(cartPopupTimer);
+                if (open) cartPopupTimer = window.setTimeout(function () { setCartPopup(false); }, 8000);
+            }
+
+            function showCartPopup(data) {
+                if (! cartPopup || ! phoneQuery.matches) return;
+                var detail = cartPopup.querySelector('[data-cart-popup-detail]');
+                if (detail) {
+                    var items = data.count + (data.count === 1 ? ' item' : ' items') + ' in your cart';
+                    detail.textContent = data.product ? data.product + ' · ' + items : items;
+                }
+                setCartPopup(true);
+            }
+
+            document.addEventListener('click', function (event) {
+                if (event.target.closest('[data-cart-popup-close]')) setCartPopup(false);
+            });
+
             // Add to cart (product grid + product detail forms)
             document.addEventListener('submit', function (event) {
                 var form = event.target.closest('form[data-cart-add]');
@@ -476,6 +534,7 @@
                     body: new FormData(form),
                 }).then(function (data) {
                     setCartCount(data.count);
+                    showCartPopup(data);
                     if (button) button.textContent = 'Added!';
                 }).catch(function () {
                     if (button) button.textContent = 'Try again';

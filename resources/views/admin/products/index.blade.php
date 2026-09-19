@@ -12,12 +12,27 @@
         <a class="btn" href="{{ route('admin.products.create') }}">Add product</a>
     </div>
 
+    <form class="toolbar" method="get" action="{{ route('admin.products.index') }}" style="justify-content:flex-start;gap:10px">
+        <label for="brand-filter" class="muted">Brand</label>
+        <select id="brand-filter" name="brand" onchange="this.form.submit()">
+            <option value="">All brands</option>
+            @foreach($brands as $brand)
+                <option value="{{ $brand->id }}" @selected($selectedBrand === $brand->id)>{{ $brand->name }}</option>
+            @endforeach
+        </select>
+        @if($selectedBrand)
+            <a class="btn secondary" href="{{ route('admin.products.index') }}">Clear</a>
+        @endif
+        <noscript><button class="btn" type="submit">Filter</button></noscript>
+    </form>
+
     <div class="panel" style="overflow:hidden">
         <table>
             <thead>
                 <tr>
                     <th>Product</th>
                     <th>Category</th>
+                    <th>Brand</th>
                     <th>Supplier</th>
                     <th>Price</th>
                     <th>Status</th>
@@ -37,6 +52,7 @@
                             </div>
                         </td>
                         <td>{{ $product->display_category ?: 'Uncategorized' }}</td>
+                        <td>{{ $product->brand?->name ?: 'No brand' }}</td>
                         <td>{{ $product->supplier?->name ?: 'No supplier' }}</td>
                         <td>${{ number_format($product->price, 2) }}</td>
                         <td><span class="status">In stock</span></td>
@@ -54,7 +70,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="muted">No products yet.</td>
+                        <td colspan="7" class="muted">No products found.</td>
                     </tr>
                 @endforelse
             </tbody>

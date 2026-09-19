@@ -26,6 +26,7 @@ class Order extends Model
         'bakong_checkout_url',
         'bakong_qr_string',
         'bakong_qr_md5',
+        'bakong_qr_expires_at',
         'shipping_method',
         'delivery_zone_id',
         'delivery_provider_id',
@@ -51,10 +52,16 @@ class Order extends Model
             'grand_total' => 'decimal:2',
             'placed_at' => 'datetime',
             'payment_confirmed_at' => 'datetime',
+            'bakong_qr_expires_at' => 'datetime',
             'admin_payment_seen_at' => 'datetime',
             'shipped_at' => 'datetime',
             'delivered_at' => 'datetime',
         ];
+    }
+
+    public function bakongQrExpired(): bool
+    {
+        return $this->bakong_qr_expires_at !== null && $this->bakong_qr_expires_at->isPast();
     }
 
     public function user(): BelongsTo

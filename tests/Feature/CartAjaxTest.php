@@ -22,6 +22,7 @@ class CartAjaxTest extends TestCase
 
         $response->assertOk()->assertJson([
             'count' => 2,
+            'product' => $product->name,
         ]);
     }
 

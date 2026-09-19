@@ -6,14 +6,26 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class Product extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        // Storefront catalog/home pages cache reads under dynamic per-filter
+        // keys (see CatalogController::cacheRemember), so there's no single
+        // key to target here — flush the whole cache store instead so admin
+        // edits show up immediately rather than waiting out the TTL.
+        static::saved(fn () => Cache::flush());
+        static::deleted(fn () => Cache::flush());
+    }
+
     protected $fillable = [
         'category_id',
+        'brand_id',
         'supplier_id',
         'name',
         'slug',
@@ -48,6 +60,11 @@ class Product extends Model
     public function categoryRelation(): BelongsTo
     {
         return $this->belongsTo(Category::class, 'category_id');
+    }
+
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     public function supplier(): BelongsTo

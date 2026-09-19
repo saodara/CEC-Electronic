@@ -7,8 +7,10 @@ use App\Models\DeliveryProvider;
 use App\Models\DeliveryZone;
 use App\Models\Order;
 use App\Services\BakongService;
+use App\Services\ReceiptPdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
@@ -27,6 +29,11 @@ class OrderController extends Controller
             ->count();
 
         return view('admin.orders.index', compact('orders', 'paymentNotificationsCount'));
+    }
+
+    public function receipt(Order $order, ReceiptPdf $receipts): Response
+    {
+        return $receipts->download($order);
     }
 
     public function show(Order $order): View

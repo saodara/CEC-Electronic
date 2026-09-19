@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\BrandController as AdminBrandController;
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Admin\CustomerController as AdminCustomerController;
@@ -30,6 +31,7 @@ Route::delete('/cart/items/{cartItem}', [CartController::class, 'destroy'])->nam
 Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout.create');
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/success/{order}', [CheckoutController::class, 'success'])->name('checkout.success');
+Route::post('/checkout/regenerate-qr/{order}', [CheckoutController::class, 'regenerateQr'])->name('checkout.regenerate-qr');
 Route::get('/checkout/payment-status/{order}', [CheckoutController::class, 'paymentStatus'])->name('checkout.payment-status');
 
 Route::get('/login', [CustomerAuthController::class, 'login'])->name('customer.login');
@@ -48,6 +50,7 @@ Route::prefix('account')->name('account.')->group(function () {
     Route::get('/', [AccountController::class, 'dashboard'])->name('dashboard');
     Route::get('/orders', [AccountController::class, 'orders'])->name('orders');
     Route::get('/orders/{order}', [AccountController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}/receipt', [AccountController::class, 'receipt'])->name('orders.receipt');
 });
 
 Route::get('/admin/login', [AdminAuthController::class, 'create'])->name('admin.login');
@@ -62,7 +65,9 @@ Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAd
     Route::get('/', [AdminProductController::class, 'dashboard'])->name('dashboard');
     Route::resource('products', AdminProductController::class);
     Route::resource('categories', AdminCategoryController::class)->except(['show']);
+    Route::resource('brands', AdminBrandController::class)->except(['show']);
     Route::resource('orders', AdminOrderController::class)->only(['index', 'show', 'update']);
+    Route::get('orders/{order}/receipt', [AdminOrderController::class, 'receipt'])->name('orders.receipt');
     Route::post('orders/{order}/verify-payment', [AdminOrderController::class, 'verifyPayment'])->name('orders.verify-payment');
     Route::get('customers', [AdminCustomerController::class, 'index'])->name('customers.index');
     Route::get('customers/{phone}', [AdminCustomerController::class, 'show'])->name('customers.show');

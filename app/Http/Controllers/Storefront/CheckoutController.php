@@ -68,14 +68,7 @@ class CheckoutController extends Controller
         $order = $this->checkoutService->createOrder($request, $data);
 
         if ($order->payment_method === 'bakong') {
-            // Generate a fixed-amount QR and store the string + md5 for payment polling.
-            $qrData = app(BakongService::class)->generateQrForOrder($order);
-            if ($qrData) {
-                $order->update([
-                    'bakong_qr_string' => $qrData['qr'],
-                    'bakong_qr_md5'    => $qrData['md5'],
-                ]);
-            }
+            $this->issueQr($order);
         }
 
         return redirect()->route('checkout.success', $order)->with('status', 'Order placed.');
@@ -87,7 +80,44 @@ class CheckoutController extends Controller
 
         $order->load('items');
 
+        // The QR closes 90 seconds after it is issued (the deadline is baked into
+        // the KHQR payload, so Bakong's app rejects it too). Never regenerate it
+        // just because the page was revisited — that would reset the clock. Only
+        // orders that have no QR deadline yet (created before the expiry existed)
+        // get a fresh one; after expiry the customer asks for a new QR explicitly.
+        if ($order->payment_method === 'bakong'
+            && $order->payment_status === 'unpaid'
+            && $order->bakong_qr_expires_at === null) {
+            $this->issueQr($order);
+        }
+
         return view('checkout.success', compact('order'));
+    }
+
+    public function regenerateQr(Request $request, Order $order): RedirectResponse
+    {
+        abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
+
+        if ($order->payment_method !== 'bakong' || $order->payment_status !== 'unpaid' || ! $order->bakongQrExpired()) {
+            return redirect()->route('checkout.success', $order);
+        }
+
+        // A new QR has a different md5, so a payment made on the old QR in its
+        // last minutes would never be seen again. Check the old one once first
+        // (a customer-initiated action, so it may pass the automated daily cap).
+        if ($order->bakong_qr_md5
+            && app(BakongService::class)->checkTransactionByMd5($order->bakong_qr_md5, enforceBudget: false) !== null) {
+            $order->update([
+                'payment_status'       => 'paid',
+                'payment_confirmed_at' => now(),
+            ]);
+
+            return redirect()->route('checkout.success', $order)->with('status', 'Payment received.');
+        }
+
+        $this->issueQr($order);
+
+        return redirect()->route('checkout.success', $order)->with('status', 'A new QR code was generated.');
     }
 
     public function paymentStatus(Request $request, Order $order): JsonResponse
@@ -121,6 +151,24 @@ class CheckoutController extends Controller
             'payment_status' => $order->payment_status,
             'is_paid' => $order->payment_status === 'paid',
             'paid_at' => $order->payment_confirmed_at?->toIso8601String(),
+            'qr_expired' => $order->payment_status !== 'paid' && $order->bakongQrExpired(),
         ]);
+    }
+
+    /**
+     * Generate a fixed-amount QR (valid for the configured window) and store the
+     * string, md5 (for payment polling) and deadline on the order.
+     */
+    private function issueQr(Order $order): void
+    {
+        $qrData = app(BakongService::class)->generateQrForOrder($order);
+
+        if ($qrData) {
+            $order->update([
+                'bakong_qr_string'     => $qrData['qr'],
+                'bakong_qr_md5'        => $qrData['md5'],
+                'bakong_qr_expires_at' => $qrData['expires_at'],
+            ]);
+        }
     }
 }

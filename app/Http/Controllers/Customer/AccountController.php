@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Services\ReceiptPdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class AccountController extends Controller
@@ -52,5 +54,16 @@ class AccountController extends Controller
         }
 
         return view('account.order-show', compact('order'));
+    }
+
+    public function receipt(Request $request, Order $order, ReceiptPdf $receipts): Response|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()->route('customer.login');
+        }
+
+        abort_unless($order->user_id === $request->user()->id, 403);
+
+        return $receipts->download($order);
     }
 }

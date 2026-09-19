@@ -100,6 +100,29 @@ class KhqrGeneratorTest extends TestCase
         $this->assertArrayNotHasKey('62', $this->parseTlvFields($result['qr']));
     }
 
+    public function test_expiration_is_set_in_seconds_in_the_timestamp_tag(): void
+    {
+        $before = time();
+        $result = KhqrGenerator::individual('john@bank', 'John Merchant', expirationSeconds: 90);
+
+        $timestamps = $this->parseTlvFields($this->parseTlvFields($result['qr'])['99']);
+        $createdMs = (int) $timestamps['00'];
+        $expiresMs = (int) $timestamps['01'];
+
+        $this->assertSame(90 * 1000, $expiresMs - $createdMs);
+        $this->assertGreaterThanOrEqual($before + 90, $result['expires_at']);
+        $this->assertSame(intdiv($expiresMs, 1000), $result['expires_at']);
+    }
+
+    public function test_expiration_defaults_to_one_day(): void
+    {
+        $result = KhqrGenerator::individual('john@bank', 'John Merchant');
+
+        $timestamps = $this->parseTlvFields($this->parseTlvFields($result['qr'])['99']);
+
+        $this->assertSame(86400 * 1000, (int) $timestamps['01'] - (int) $timestamps['00']);
+    }
+
     /**
      * Decode a tag-length-value (EMV QR) string into a flat [tag => value] map.
      *

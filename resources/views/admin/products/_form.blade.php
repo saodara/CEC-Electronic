@@ -19,6 +19,17 @@
     </div>
 
     <div class="field">
+        <label for="brand_id">Brand</label>
+        <select id="brand_id" name="brand_id">
+            <option value="">No brand</option>
+            @foreach($brands as $brand)
+                <option value="{{ $brand->id }}" @selected((int) old('brand_id', $product->brand_id) === $brand->id)>{{ $brand->name }}</option>
+            @endforeach
+        </select>
+        @error('brand_id') <span class="error">{{ $message }}</span> @enderror
+    </div>
+
+    <div class="field">
         <label for="price">Price USD</label>
         <input id="price" name="price" type="number" min="0.01" step="0.01" value="{{ old('price', $product->price ?? 0) }}" required>
         @error('price') <span class="error">{{ $message }}</span> @enderror
@@ -64,10 +75,11 @@
         @if($product->image)
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
                 <img class="thumb" src="{{ $product->image_url }}" alt="{{ $product->name ?: 'Product image' }}">
-                <span class="muted">Upload a new JPG, PNG, or WEBP file to replace this image.</span>
+                <span class="muted">Upload a new image or icon file to replace this image.</span>
             </div>
         @endif
-        <input id="image" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+        <input id="image" name="image" type="file" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.ico,image/*">
+        <span class="muted" style="display:block;margin-top:6px">Supports JPG, PNG, GIF, BMP, WEBP, SVG, and ICO up to 4MB.</span>
         @error('image') <span class="error">{{ $message }}</span> @enderror
     </div>
 

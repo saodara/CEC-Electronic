@@ -40,6 +40,7 @@ class CartController extends Controller
         if ($request->wantsJson()) {
             return response()->json([
                 'message' => 'Product added to cart.',
+                'product' => $product->name,
                 'count' => $this->cartService->count($request),
             ]);
         }
