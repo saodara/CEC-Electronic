@@ -208,4 +208,58 @@ class OrderManagementTest extends TestCase
 
         $this->assertDatabaseCount('shipments', 0);
     }
+
+    private function unpaidBakongOrder(): Order
+    {
+        config([
+            'services.bakong.base_url' => 'https://api-bakong.test/v1',
+            'services.bakong.access_token' => 'test-token',
+        ]);
+
+        return Order::factory()->create([
+            'payment_method' => 'bakong',
+            'payment_status' => 'unpaid',
+            'bakong_qr_md5' => 'md5-admin',
+        ]);
+    }
+
+    public function test_admin_can_verify_a_bakong_payment(): void
+    {
+        $order = $this->unpaidBakongOrder();
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['responseCode' => 0, 'data' => ['hash' => 'md5-admin']], 200)]);
+        $this->actingAsAdmin();
+
+        $this->post(route('admin.orders.verify-payment', $order))->assertRedirect();
+
+        $order->refresh();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertNotNull($order->payment_confirmed_at);
+    }
+
+    public function test_admin_verify_leaves_the_order_unpaid_when_bakong_has_no_payment(): void
+    {
+        $order = $this->unpaidBakongOrder();
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['responseCode' => 1, 'data' => null], 200)]);
+        $this->actingAsAdmin();
+
+        $this->post(route('admin.orders.verify-payment', $order))->assertRedirect();
+
+        $this->assertSame('unpaid', $order->fresh()->payment_status);
+    }
+
+    public function test_admin_verify_works_when_the_cache_is_unwritable(): void
+    {
+        $order = $this->unpaidBakongOrder();
+        config([
+            'cache.default' => 'broken',
+            'cache.stores.broken' => ['driver' => 'file', 'path' => '/proc/no-such-dir/cache'],
+        ]);
+        \Illuminate\Support\Facades\Cache::purge('broken');
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['responseCode' => 0, 'data' => ['hash' => 'md5-admin']], 200)]);
+        $this->actingAsAdmin();
+
+        $this->post(route('admin.orders.verify-payment', $order))->assertRedirect();
+
+        $this->assertSame('paid', $order->fresh()->payment_status);
+    }
 }

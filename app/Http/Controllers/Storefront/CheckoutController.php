@@ -10,7 +10,6 @@ use App\Services\CheckoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class CheckoutController extends Controller
@@ -134,15 +133,32 @@ class CheckoutController extends Controller
         // every poll spending part of the shared daily quota.
         $throttleKey = "bakong-check:{$order->id}";
 
-        if ($order->payment_status === 'unpaid' && $order->bakong_qr_md5 && Cache::add($throttleKey, true, 60)) {
-            $tx = app(BakongService::class)->checkTransactionByMd5($order->bakong_qr_md5);
+        if ($order->payment_status === 'unpaid' && $order->bakong_qr_md5) {
+            $checkNow = app(BakongService::class)->allowOnce($throttleKey, 60);
+            $finalCheck = false;
 
-            if ($tx !== null) {
-                $order->update([
-                    'payment_status'      => 'paid',
-                    'payment_confirmed_at' => now(),
-                ]);
-                $order->refresh();
+            // A customer can pay in the last seconds of the 90s QR window, after
+            // the last throttled check and just before the page stops polling.
+            // Give every order one extra check once its QR has expired so that
+            // payment is still picked up (like regenerateQr, this is
+            // customer-driven and once per order, so it may pass the daily cap).
+            if (! $checkNow && $order->bakongQrExpired()) {
+                $finalCheck = $checkNow = app(BakongService::class)->allowOnce("bakong-final-check:{$order->id}", 86400);
+            }
+
+            if ($checkNow) {
+                $tx = app(BakongService::class)->checkTransactionByMd5(
+                    $order->bakong_qr_md5,
+                    enforceBudget: ! $finalCheck,
+                );
+
+                if ($tx !== null) {
+                    $order->update([
+                        'payment_status'      => 'paid',
+                        'payment_confirmed_at' => now(),
+                    ]);
+                    $order->refresh();
+                }
             }
         }
 

@@ -294,6 +294,24 @@
                         });
                     }
 
+                    // The QR window is over. A payment made in its last seconds (or
+                    // just before this page was reloaded) is still worth one last
+                    // look before telling the customer it expired.
+                    function finalCheck() {
+                        window.clearInterval(timer);
+                        window.clearInterval(countdownTimer);
+                        if (statusMessage) statusMessage.textContent = 'Checking your payment…';
+
+                        window.setTimeout(function () {
+                            fetch(statusUrl, {
+                                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                            })
+                            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+                            .then(function (data) { if (data.is_paid) { markPaid(); } else { showExpired(); } })
+                            .catch(showExpired);
+                        }, 2000);
+                    }
+
                     window.addEventListener('message', function (e) {
                         if (e.data && e.data.event === 'payment_success') checkPayment();
                     });
@@ -302,12 +320,12 @@
                         timer = window.setInterval(checkPayment, POLL_INTERVAL_MS);
                         checkPayment();
                     } else if (secondsLeft <= 0) {
-                        showExpired();
+                        finalCheck();
                     } else {
                         renderCountdown();
                         countdownTimer = window.setInterval(function () {
                             secondsLeft -= 1;
-                            if (secondsLeft <= 0) { showExpired(); return; }
+                            if (secondsLeft <= 0) { finalCheck(); return; }
                             renderCountdown();
                         }, 1000);
                         timer = window.setInterval(checkPayment, POLL_INTERVAL_MS);

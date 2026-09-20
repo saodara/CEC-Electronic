@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class BakongService
 {
@@ -127,21 +128,66 @@ class BakongService
         return $response->json('data');
     }
 
+    /**
+     * True the first time it is called for $key within $seconds — a throttle
+     * that protects the shared Bakong quota. It must never stop a payment being
+     * confirmed, so if the cache is unavailable (e.g. an unwritable cache
+     * folder) it falls back to a per-session throttle instead of throwing, and
+     * allows the call outright where there is no session (console/queue).
+     */
+    public function allowOnce(string $key, int $seconds): bool
+    {
+        try {
+            return Cache::add($key, true, $seconds);
+        } catch (Throwable $e) {
+            Log::warning('Bakong throttle cache unavailable, using session fallback', ['message' => $e->getMessage()]);
+        }
+
+        $request = request();
+
+        if (! $request->hasSession()) {
+            return true;
+        }
+
+        $sessionKey = 'bakong_throttle.'.md5($key);
+        $last = (int) $request->session()->get($sessionKey, 0);
+
+        if ($last > 0 && (time() - $last) < $seconds) {
+            return false;
+        }
+
+        $request->session()->put($sessionKey, time());
+
+        return true;
+    }
+
     private function dailyBudgetExceeded(): bool
     {
         if ($this->dailyCheckLimit <= 0) {
             return false;
         }
 
-        return (int) Cache::get($this->dailyBudgetKey(), 0) >= $this->dailyCheckLimit;
+        try {
+            return (int) Cache::get($this->dailyBudgetKey(), 0) >= $this->dailyCheckLimit;
+        } catch (Throwable $e) {
+            // The counter only protects the daily quota. An unwritable cache
+            // must never stop a customer's payment from being confirmed.
+            Log::warning('Bakong daily budget counter unavailable', ['message' => $e->getMessage()]);
+
+            return false;
+        }
     }
 
     private function recordDailyCheck(): void
     {
-        $key = $this->dailyBudgetKey();
+        try {
+            $key = $this->dailyBudgetKey();
 
-        Cache::add($key, 0, now()->endOfDay()->addSecond());
-        Cache::increment($key);
+            Cache::add($key, 0, now()->endOfDay()->addSecond());
+            Cache::increment($key);
+        } catch (Throwable $e) {
+            Log::warning('Bakong daily budget counter unavailable', ['message' => $e->getMessage()]);
+        }
     }
 
     private function dailyBudgetKey(): string

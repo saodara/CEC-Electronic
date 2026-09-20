@@ -11,7 +11,6 @@ use App\Services\ReceiptPdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class OrderController extends Controller
@@ -103,7 +102,7 @@ class OrderController extends Controller
         }
 
         // Debounce accidental double-clicks; not a budget limit.
-        if (! Cache::add("bakong-admin-verify:{$order->id}", true, 10)) {
+        if (! $bakong->allowOnce("bakong-admin-verify:{$order->id}", 10)) {
             return back()->with('status', 'Already checking — please wait a moment.');
         }
 

@@ -151,4 +151,25 @@ class CheckPendingBakongPaymentsTest extends TestCase
 
         Http::assertSentCount(2);
     }
+
+    public function test_it_still_confirms_payments_when_the_cache_is_unwritable(): void
+    {
+        $this->configureBakong();
+        config([
+            'cache.default' => 'broken',
+            'cache.stores.broken' => ['driver' => 'file', 'path' => '/proc/no-such-dir/cache'],
+        ]);
+        \Illuminate\Support\Facades\Cache::purge('broken');
+
+        $order = $this->makeOrder([
+            'payment_method' => 'bakong',
+            'payment_status' => 'unpaid',
+            'bakong_qr_md5' => 'md5-broken-cache',
+        ]);
+        Http::fake(['*' => Http::response(['responseCode' => 0, 'data' => ['hash' => 'md5-broken-cache']], 200)]);
+
+        $this->artisan('bakong:check-pending')->assertSuccessful();
+
+        $this->assertSame('paid', $order->fresh()->payment_status);
+    }
 }

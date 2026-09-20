@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Models\Order;
 use App\Services\BakongService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Keeps confirming Bakong KHQR payments in the background so a customer
@@ -48,7 +47,7 @@ class CheckPendingBakongPayments extends Command
             // actively paying right now. Space job-driven rechecks per order
             // out to once every 20 minutes instead (live page polling already
             // covers the minutes right after checkout much more tightly).
-            if (! Cache::add("bakong-job-check:{$order->id}", true, 1200)) {
+            if (! $bakong->allowOnce("bakong-job-check:{$order->id}", 1200)) {
                 continue;
             }
 

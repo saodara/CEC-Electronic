@@ -5,6 +5,7 @@ namespace Tests\Feature\Storefront;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -140,5 +141,97 @@ class CheckoutQrExpiryTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->post(route('checkout.regenerate-qr', $order))
             ->assertForbidden();
+    }
+
+    private function bakongSaysPaid(): void
+    {
+        Http::fake(['*' => Http::response(['responseCode' => 0, 'data' => ['hash' => md5('old-qr')]], 200)]);
+    }
+
+    public function test_payment_is_confirmed_even_when_the_cache_is_unwritable(): void
+    {
+        // Reproduces a cache dir that the web user cannot write to (root-owned
+        // folders): the daily-budget counter and throttle must not stop a paid
+        // order from being confirmed.
+        config([
+            'cache.default' => 'broken',
+            'cache.stores.broken' => ['driver' => 'file', 'path' => '/proc/no-such-dir/cache'],
+        ]);
+        Cache::purge('broken');
+
+        $user = User::factory()->create();
+        $order = $this->bakongOrder($user);
+        $this->bakongSaysPaid();
+
+        $this->actingAs($user)->getJson(route('checkout.payment-status', $order))
+            ->assertOk()
+            ->assertJson(['is_paid' => true]);
+
+        $this->assertSame('paid', $order->fresh()->payment_status);
+    }
+
+    public function test_a_payment_made_in_the_last_seconds_is_caught_by_one_final_check_after_expiry(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->bakongOrder($user, ['bakong_qr_expires_at' => now()->subSeconds(2)]);
+        $this->bakongSaysPaid();
+
+        // The normal 60s throttle window is already used up by an earlier poll.
+        Cache::put("bakong-check:{$order->id}", true, 60);
+
+        $this->actingAs($user)->getJson(route('checkout.payment-status', $order))
+            ->assertOk()
+            ->assertJson(['is_paid' => true]);
+
+        $this->assertSame('paid', $order->fresh()->payment_status);
+    }
+
+    public function test_the_final_check_after_expiry_runs_only_once_per_order(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->bakongOrder($user, ['bakong_qr_expires_at' => now()->subSeconds(2)]);
+        Http::fake(['*' => Http::response(['responseCode' => 1], 200)]);
+        Cache::put("bakong-check:{$order->id}", true, 60);
+
+        $this->actingAs($user)->getJson(route('checkout.payment-status', $order))->assertOk();
+        $this->actingAs($user)->getJson(route('checkout.payment-status', $order))->assertOk();
+        $this->actingAs($user)->getJson(route('checkout.payment-status', $order))->assertOk();
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_success_page_does_a_final_check_instead_of_giving_up_when_the_qr_ran_out(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->bakongOrder($user, ['bakong_qr_expires_at' => now()->subMinute()]);
+
+        $html = $this->actingAs($user)->get(route('checkout.success', $order))->assertOk()->getContent();
+
+        $this->assertStringContainsString('finalCheck', $html);
+    }
+
+    private function breakTheCache(): void
+    {
+        config([
+            'cache.default' => 'broken',
+            'cache.stores.broken' => ['driver' => 'file', 'path' => '/proc/no-such-dir/cache'],
+        ]);
+        Cache::purge('broken');
+    }
+
+    public function test_a_broken_cache_does_not_let_polling_flood_bakong(): void
+    {
+        $this->breakTheCache();
+        $user = User::factory()->create();
+        $order = $this->bakongOrder($user);
+        Http::fake(['*' => Http::response(['responseCode' => 1], 200)]);
+
+        // The page polls every 15s; without a working throttle every poll would
+        // spend one of Bakong's ~100 daily requests.
+        for ($i = 0; $i < 5; $i++) {
+            $this->actingAs($user)->getJson(route('checkout.payment-status', $order))->assertOk();
+        }
+
+        Http::assertSentCount(1);
     }
 }
