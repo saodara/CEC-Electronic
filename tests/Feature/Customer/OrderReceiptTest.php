@@ -110,4 +110,65 @@ class OrderReceiptTest extends TestCase
         $response->assertOk();
         $response->assertHeader('content-type', 'application/pdf');
     }
+
+    public function test_guest_is_redirected_from_inline_receipt(): void
+    {
+        $order = Order::factory()->create(['payment_status' => 'paid']);
+
+        $this->get(route('account.orders.receipt.view', $order))
+            ->assertRedirect(route('customer.login'));
+    }
+
+    public function test_owner_can_view_receipt_inline(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->paidOrderFor($user);
+
+        $response = $this->actingAs($user)->get(route('account.orders.receipt.view', $order));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $this->assertStringContainsString('inline', $response->headers->get('content-disposition'));
+    }
+
+    public function test_inline_receipt_is_forbidden_for_other_customers_and_missing_when_unpaid(): void
+    {
+        $owner = User::factory()->create();
+        $order = $this->paidOrderFor($owner);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('account.orders.receipt.view', $order))
+            ->assertForbidden();
+
+        $unpaid = Order::factory()->create(['user_id' => $owner->id, 'payment_status' => 'unpaid']);
+
+        $this->actingAs($owner)
+            ->get(route('account.orders.receipt.view', $unpaid))
+            ->assertNotFound();
+    }
+
+    public function test_order_history_lists_receipt_actions_only_for_paid_orders(): void
+    {
+        $user = User::factory()->create();
+        $paid = $this->paidOrderFor($user);
+        $unpaid = Order::factory()->create(['user_id' => $user->id, 'payment_status' => 'unpaid']);
+
+        $this->actingAs($user)->get(route('account.orders'))
+            ->assertSee(route('account.orders.show', $paid), false)
+            ->assertSee(route('account.orders.receipt.view', $paid), false)
+            ->assertSee(route('account.orders.receipt', $paid), false)
+            ->assertSee(route('account.orders.show', $unpaid), false)
+            ->assertDontSee(route('account.orders.receipt.view', $unpaid), false)
+            ->assertDontSee(route('account.orders.receipt', $unpaid), false);
+    }
+
+    public function test_header_cart_card_offers_checkout_and_view_history(): void
+    {
+        $this->get(route('shop.home'))
+            ->assertSee('data-quick-menu-toggle', false)
+            ->assertSee('href="'.route('shop.cart').'"', false)
+            ->assertSee('href="'.route('account.orders').'"', false)
+            ->assertSee('View history')
+            ->assertDontSee('latest-receipt');
+    }
 }

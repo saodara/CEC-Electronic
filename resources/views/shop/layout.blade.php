@@ -33,7 +33,7 @@
         .topbar-inner{min-height:34px;display:flex;align-items:center;justify-content:space-between;gap:18px}
         .topbar-left,.topbar-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
         .header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;box-shadow:0 4px 18px rgba(16,24,40,.04)}
-        .header-inner{min-height:78px;display:grid;grid-template-columns:230px minmax(280px,1fr) 328px;align-items:center;gap:16px}
+        .header-inner{min-height:78px;display:grid;grid-template-columns:230px minmax(280px,1fr) auto;align-items:center;gap:16px}
         .logo{display:flex;align-items:center;gap:11px;color:var(--brand);min-width:0}
         .logo-mark{width:54px;height:54px;border-radius:8px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
         .logo-mark img{width:100%;height:100%;object-fit:contain;padding:3px}
@@ -50,6 +50,16 @@
         .quick-icon{width:25px;height:25px;border-radius:5px;background:#eef5ff;color:var(--brand);display:grid;place-items:center;font-weight:900;font-size:11px;flex:0 0 auto;overflow:hidden}
         .quick-icon img{width:100%;height:100%;object-fit:cover;display:block}
         .cart-badge{position:absolute;top:2px;left:26px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1;z-index:1}
+        .quick-menu{position:relative}
+        .quick-menu>.quick{cursor:pointer;font:inherit;color:inherit;text-align:left}
+        .quick-caret{margin-left:2px;color:var(--muted);font-size:10px;transition:transform .15s ease}
+        .quick-menu.is-open .quick-caret{transform:rotate(180deg)}
+        .quick-dropdown{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:1100;min-width:210px;padding:6px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(9,30,66,.18)}
+        .quick-menu.is-open .quick-dropdown{display:block}
+        .quick-dropdown a{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:6px;color:var(--ink)}
+        .quick-dropdown a:hover{background:#f0f6ff}
+        .quick-dropdown a strong{font-size:13px}
+        .quick-dropdown a span{color:var(--muted);font-size:11px}
         .qty-control{display:flex;align-items:center;gap:8px}
         .qty-btn{width:26px;height:26px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink);font-weight:800;cursor:pointer;line-height:1}
         .qty-btn:hover{border-color:#b8c7dc;background:#f8fbff}
@@ -280,7 +290,8 @@
         }
         @media (max-width:1120px){
             .header-inner{grid-template-columns:1fr;gap:10px;padding-top:14px;padding-bottom:14px}
-            .quick-actions{justify-content:flex-start;overflow:auto}
+            .quick-actions{justify-content:flex-start;flex-wrap:wrap}
+            .quick-dropdown{right:auto;left:0}
             .service-row,.category-tiles,.brand-grid,.brand-page-hero{grid-template-columns:repeat(2,minmax(0,1fr))}
             .catalog{grid-template-columns:1fr}
             .header{position:static}
@@ -366,13 +377,20 @@
                     <a class="quick" href="{{ route('customer.login') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/login-icon.png') }}" alt="Login"></span><span><strong>Login</strong><span>Customer account</span></span></a>
                     <a class="quick" href="{{ route('customer.register') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/register-icon.jpeg') }}" alt="Register"></span><span><strong>Register</strong><span>New customer</span></span></a>
                 @endauth
-                <a class="quick" href="{{ route('shop.cart') }}">
-                    <span class="quick-icon">
-                        <img src="{{ asset('images/ProfileAndOrder/card.jpeg') }}" alt="Cart">
-                    </span>
-                    <span id="cart-count" class="cart-badge" style="{{ $cartCount > 0 ? '' : 'display:none' }}">{{ $cartCount }}</span>
-                    <span><strong>Cart</strong><span>Checkout</span></span>
-                </a>
+                <div class="quick-menu" data-quick-menu>
+                    <button type="button" class="quick" data-quick-menu-toggle aria-haspopup="true" aria-expanded="false">
+                        <span class="quick-icon">
+                            <img src="{{ asset('images/ProfileAndOrder/card.jpeg') }}" alt="Cart">
+                        </span>
+                        <span id="cart-count" class="cart-badge" style="{{ $cartCount > 0 ? '' : 'display:none' }}">{{ $cartCount }}</span>
+                        <span><strong>Cart</strong><span>Checkout &amp; history</span></span>
+                        <span class="quick-caret" aria-hidden="true">&#9660;</span>
+                    </button>
+                    <div class="quick-dropdown" role="menu">
+                        <a href="{{ route('shop.cart') }}" role="menuitem"><strong>Checkout</strong><span>Review your cart and pay</span></a>
+                        <a href="{{ route('account.orders') }}" role="menuitem"><strong>View history</strong><span>Orders, receipts and downloads</span></a>
+                    </div>
+                </div>
             </div>
         </div>
         <nav class="nav">
@@ -509,6 +527,29 @@
                 }
                 setCartPopup(true);
             }
+
+            // Header Cart card: Checkout / View history dropdown.
+            function closeQuickMenus(except) {
+                document.querySelectorAll('[data-quick-menu].is-open').forEach(function (menu) {
+                    if (menu === except) return;
+                    menu.classList.remove('is-open');
+                    menu.querySelector('[data-quick-menu-toggle]').setAttribute('aria-expanded', 'false');
+                });
+            }
+
+            document.addEventListener('click', function (event) {
+                var toggle = event.target.closest('[data-quick-menu-toggle]');
+                var menu = toggle ? toggle.closest('[data-quick-menu]') : null;
+                closeQuickMenus(menu);
+                if (menu) {
+                    var open = menu.classList.toggle('is-open');
+                    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') closeQuickMenus(null);
+            });
 
             document.addEventListener('click', function (event) {
                 if (event.target.closest('[data-cart-popup-close]')) setCartPopup(false);

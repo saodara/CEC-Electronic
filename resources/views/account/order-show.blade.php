@@ -10,6 +10,7 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
             @if($order->payment_status === 'paid')
+                <a class="btn secondary" href="{{ route('account.orders.receipt.view', $order) }}" target="_blank" rel="noopener">View receipt</a>
                 <a class="btn" href="{{ route('account.orders.receipt', $order) }}">Download receipt</a>
             @endif
             <a class="btn secondary" href="{{ route('account.orders') }}">Back to orders</a>

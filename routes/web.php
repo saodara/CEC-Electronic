@@ -51,6 +51,7 @@ Route::prefix('account')->name('account.')->group(function () {
     Route::get('/orders', [AccountController::class, 'orders'])->name('orders');
     Route::get('/orders/{order}', [AccountController::class, 'show'])->name('orders.show');
     Route::get('/orders/{order}/receipt', [AccountController::class, 'receipt'])->name('orders.receipt');
+    Route::get('/orders/{order}/receipt/view', [AccountController::class, 'viewReceipt'])->name('orders.receipt.view');
 });
 
 Route::get('/admin/login', [AdminAuthController::class, 'create'])->name('admin.login');

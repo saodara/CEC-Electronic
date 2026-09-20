@@ -66,4 +66,15 @@ class AccountController extends Controller
 
         return $receipts->download($order);
     }
+
+    public function viewReceipt(Request $request, Order $order, ReceiptPdf $receipts): Response|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()->route('customer.login');
+        }
+
+        abort_unless($order->user_id === $request->user()->id, 403);
+
+        return $receipts->stream($order);
+    }
 }
