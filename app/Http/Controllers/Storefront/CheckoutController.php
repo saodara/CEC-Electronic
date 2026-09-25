@@ -79,7 +79,7 @@ class CheckoutController extends Controller
 
         $order->load('items');
 
-        // The QR closes 90 seconds after it is issued (the deadline is baked into
+        // The QR closes 3 minutes after it is issued (the deadline is baked into
         // the KHQR payload, so Bakong's app rejects it too). Never regenerate it
         // just because the page was revisited — that would reset the clock. Only
         // orders that have no QR deadline yet (created before the expiry existed)
@@ -137,7 +137,7 @@ class CheckoutController extends Controller
             $checkNow = app(BakongService::class)->allowOnce($throttleKey, 60);
             $finalCheck = false;
 
-            // A customer can pay in the last seconds of the 90s QR window, after
+            // A customer can pay in the last seconds of the 3-minute QR window, after
             // the last throttled check and just before the page stops polling.
             // Give every order one extra check once its QR has expired so that
             // payment is still picked up (like regenerateQr, this is

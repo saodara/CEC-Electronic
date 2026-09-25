@@ -29,7 +29,7 @@ class BakongService
         $this->accessToken     = (string) config('services.bakong.access_token', '');
         $this->merchantCity    = (string) config('services.bakong.merchant_city', 'Phnom Penh');
         $this->dailyCheckLimit = (int) config('services.bakong.daily_check_limit', 90);
-        $this->qrExpirySeconds = max(1, (int) config('services.bakong.qr_expiry_seconds', 90));
+        $this->qrExpirySeconds = max(1, (int) config('services.bakong.qr_expiry_seconds', 180));
     }
 
     public function isConfigured(): bool
@@ -51,7 +51,7 @@ class BakongService
      * Generate a fixed-amount KHQR string for an order — computed locally
      * following the NBC KHQR SDK spec, no API call needed.
      * Returns ['qr' => string, 'md5' => string, 'expires_at' => Carbon] or null if not configured.
-     * The QR is only valid for services.bakong.qr_expiry_seconds (default 90).
+     * The QR is only valid for services.bakong.qr_expiry_seconds (default 180 = 3 minutes).
      */
     public function generateQrForOrder(Order $order): ?array
     {

@@ -21,7 +21,7 @@ class CheckoutQrExpiryTest extends TestCase
             'services.bakong.base_url' => 'https://api-bakong.test/v1',
             'services.bakong.account_username' => '855012345678',
             'services.bakong.access_token' => 'test-token',
-            'services.bakong.qr_expiry_seconds' => 90,
+            'services.bakong.qr_expiry_seconds' => 180,
         ]);
     }
 
@@ -62,7 +62,7 @@ class CheckoutQrExpiryTest extends TestCase
         $this->assertTrue($order->bakong_qr_expires_at->equalTo($deadline));
     }
 
-    public function test_success_page_issues_a_90_second_qr_for_orders_without_a_deadline(): void
+    public function test_success_page_issues_a_3_minute_qr_for_orders_without_a_deadline(): void
     {
         $user = User::factory()->create();
         $order = $this->bakongOrder($user, ['bakong_qr_expires_at' => null]);
@@ -71,7 +71,7 @@ class CheckoutQrExpiryTest extends TestCase
 
         $order->refresh();
         $this->assertNotSame('old-qr', $order->bakong_qr_string);
-        $this->assertEqualsWithDelta(90, now()->diffInSeconds($order->bakong_qr_expires_at), 2);
+        $this->assertEqualsWithDelta(180, now()->diffInSeconds($order->bakong_qr_expires_at), 2);
     }
 
     public function test_success_page_shows_expired_state_after_the_deadline(): void

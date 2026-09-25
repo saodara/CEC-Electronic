@@ -42,7 +42,7 @@ return [
         'access_token' => env('BAKONG_ACCESS_TOKEN'),
         'merchant_city' => env('BAKONG_MERCHANT_CITY', 'Phnom Penh'),
         // How long a generated KHQR stays payable before it closes.
-        'qr_expiry_seconds' => (int) env('BAKONG_QR_EXPIRY_SECONDS', 90),
+        'qr_expiry_seconds' => (int) env('BAKONG_QR_EXPIRY_SECONDS', 180),
         // Bakong caps check_transaction_by_md5 at ~100 requests/day for the
         // whole account. Keep a safety margin below that so the app never
         // gets everyone's pending orders stuck until the quota resets.

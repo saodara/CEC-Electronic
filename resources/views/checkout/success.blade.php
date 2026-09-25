@@ -109,7 +109,7 @@
                         <div data-qr-expired @if(! $qrExpired) hidden @endif style="text-align:center;padding:24px 12px">
                             <p style="font-weight:700;margin:0 0 6px">This QR code has expired</p>
                             <p style="color:var(--muted);margin:0 0 16px;font-size:13px">
-                                QR codes are valid for {{ (int) config('services.bakong.qr_expiry_seconds', 90) }} seconds. Do not pay an expired code — generate a new one.
+                                QR codes are valid for {{ round((int) config('services.bakong.qr_expiry_seconds', 180) / 60) }} minutes. Do not pay an expired code — generate a new one.
                             </p>
                             <div style="display:flex;gap:10px">
                                 <form method="POST" action="{{ route('checkout.regenerate-qr', $order) }}" style="flex:1;margin:0">
