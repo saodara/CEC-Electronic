@@ -130,8 +130,8 @@ CEC Electronic is one Laravel application split into three functional areas that
   - Payment method selection, including **KHQR / Bakong** QR payment alongside cash-on-delivery / bank-transfer.
   - Empty-cart and double-submission are handled gracefully (e.g., a double-click on "Place order" doesn't crash the page).
 - Order success page:
-  - Shows the order confirmation and a live KHQR code (auto-regenerated if the previous one has expired).
-  - Polls the server every 15 seconds to check whether the Bakong payment has been confirmed, and automatically shows a "Payment successful" confirmation once it is — no manual refresh needed.
+  - Shows the order confirmation and a KHQR payment popup with a **3-minute countdown**; once the QR expires the customer can generate a new one.
+  - Polls the server every 15 seconds to check whether the Bakong payment has been confirmed, and automatically shows a "Payment successful" confirmation with a **Download receipt** button once it is — no manual refresh needed.
 
 ### 5.2 Customer Account Features
 - Register / login / logout.
@@ -194,10 +194,11 @@ The system uses **PostgreSQL**, with the schema fully managed through Laravel mi
 |---|---|---|
 | `users` | Shared table for customers **and** admins | `name`, `email`, `password`, `is_admin` (boolean flag distinguishing admin accounts) |
 | `categories` | Product categories, with sub-category support | `parent_id` (self-referencing), `name`, `slug`, `description`, `image`, `is_active`, `sort_order` |
-| `products` | Product catalog | `category_id`, `supplier_id`, `name`, `slug`, `sku`, `description`, `price`, `compare_at_price`, `cost_price`, `stock_quantity`, `is_active`, `is_featured`, `image`, `images` (JSON gallery), `specifications` (JSON) |
+| `brands` | Product brands (Apple, Dell, Samsung, …) shown on the storefront | `name`, `slug` (unique), `logo`, `is_active`, `sort_order` |
+| `products` | Product catalog | `category_id`, `brand_id` (nullable, set to null if the brand is deleted), `supplier_id`, `name`, `slug`, `sku`, `description`, `price`, `compare_at_price`, `cost_price`, `stock_quantity`, `is_active`, `is_featured`, `image`, `images` (JSON gallery), `specifications` (JSON) |
 | `cart_items` | Shopping cart rows | `user_id` (nullable) OR `session_id` (nullable) — one or the other identifies the cart owner; `product_id`, `quantity`, `unit_price` |
 | `customer_addresses` | Saved shipping addresses | `user_id`, `label`, `recipient_name`, `phone`, address lines, `city`, `province`, `postal_code`, `country`, `is_default` |
-| `orders` | Placed orders | `order_number` (unique), `user_id`, customer name/email/phone, `status`, `payment_status`, `payment_method`, KHQR/Bakong fields (`bakong_qr_string`, `bakong_qr_md5`, `bakong_session_id`, `bakong_checkout_url`), `shipping_method`, `delivery_zone_id`, `delivery_provider_id`, `tracking_number`, `shipped_at`, `delivered_at`, `subtotal`, `shipping_total`, `discount_total`, `grand_total`, `shipping_address` (JSON snapshot), `notes`, `placed_at` |
+| `orders` | Placed orders | `order_number` (unique), `user_id`, customer name/email/phone, `status`, `payment_status`, `payment_method`, KHQR/Bakong fields (`bakong_qr_string`, `bakong_qr_md5`, `bakong_qr_expires_at`, `bakong_session_id`, `bakong_checkout_url`), `payment_confirmed_at`, `admin_payment_seen_at`, `shipping_method`, `delivery_zone_id`, `delivery_provider_id`, `tracking_number`, `shipped_at`, `delivered_at`, `subtotal`, `shipping_total`, `discount_total`, `grand_total`, `shipping_address` (JSON snapshot), `notes`, `placed_at` |
 | `order_items` | Line items per order | `order_id`, `product_id` (nullable), `product_name`, `sku` — **snapshotted at time of purchase** so later product edits/deletion never change historical order data; `quantity`, `unit_price`, `line_total` |
 | `suppliers` | Business's own suppliers | `name`, `company_name`, `email`, `phone`, `website`, `address`, `contact_person`, `payment_terms`, `is_active`, `notes` |
 | `purchase_orders` / `purchase_order_items` | Supplier purchase/restocking records | `po_number`, `supplier_id`, `status`, `subtotal`, `grand_total`, `expected_date`, `received_date` (+ line items per product/quantity/cost) |
@@ -244,34 +245,63 @@ The system uses **PostgreSQL**, with the schema fully managed through Laravel mi
 
 ## 8. Payment Integration — KHQR / Bakong (Detailed)
 
-KHQR is the National Bank of Cambodia's (NBC) standardized QR payment format, allowing a QR code to be scanned by essentially any participating Cambodian banking or e-wallet app.
+KHQR is the National Bank of Cambodia's (NBC) standardized QR payment format, allowing a QR code to be scanned by essentially any participating Cambodian banking or e-wallet app (ABA, ACLEDA, Wing, Bakong, …).
 
 ### 8.1 How QR generation works
-- The KHQR payload is generated **entirely locally**, in pure PHP — no external API call is needed just to produce the QR code.
+- The KHQR payload is generated **entirely locally**, in pure PHP (`KhqrGenerator`) — no external API call is needed just to produce the QR code.
 - It follows the official KHQR / EMVCo-style tag-length-value (TLV) format, assembling fields such as:
-  - Payload format indicator, point-of-initiation method
-  - Merchant account information (the store's Bakong account alias)
-  - Merchant category code, currency, and amount
-  - Country and merchant name/city
-  - A reference/bill number tied to the order number
-  - A creation/expiry timestamp
-  - A CRC16 checksum guaranteeing the QR content is well-formed
-- Because the amount is embedded directly in the QR, the customer cannot accidentally pay the wrong amount.
+  - Payload format indicator (`00`) and point-of-initiation method (`01` = dynamic, one-time QR)
+  - Merchant account information (`29` — the store's Bakong account ID)
+  - Merchant category code (`52`), currency (`53`, USD = 840 / KHR = 116), and amount (`54`)
+  - Country (`58`), merchant name (`59`) and city (`60`)
+  - A bill number tied to the order number (`62`)
+  - Creation and expiry timestamps in milliseconds (`99`)
+  - A CRC16 checksum (`63`) guaranteeing the QR content is well-formed
+- An **MD5 hash** of the full QR string is stored on the order (`bakong_qr_md5`); this is what the system later uses to ask Bakong "has this exact QR been paid?".
+- Because the amount is embedded directly in the QR, the customer cannot accidentally pay the wrong amount — the page states "Amount is fixed — cannot be changed".
+- The QR image is drawn in the browser by a **self-hosted** QR library, so the payment page does not depend on an external CDN.
 
-### 8.2 How payment confirmation works
-- The checkout success page renders the KHQR code and **polls the server every 15 seconds** to check whether payment has arrived.
-- On confirmation, the page automatically transforms the "waiting for payment" view into a clear **"Payment successful"** confirmation, with the order number, amount, and a link to the order history — no manual page refresh required.
-- A **background scheduled job** also checks pending Bakong payments automatically every 5 minutes, so payment confirmation does not depend on the customer keeping their browser tab open.
-- Because a KHQR code carries a built-in expiry, the system automatically regenerates a fresh, valid QR code if a customer revisits an unpaid order after the previous one has expired.
+### 8.2 QR expiry — "closes in 3 minutes"
+- Each QR is valid for **3 minutes** (`BAKONG_QR_EXPIRY_SECONDS`, default `180`). The deadline is baked into the KHQR payload itself, so the banking app also rejects the code after it closes — not just our website.
+- The deadline is saved on the order (`bakong_qr_expires_at`), and the payment popup shows a live **"QR expires in mm:ss" countdown**. The remaining time is calculated on the server, so a wrong clock on the customer's phone does not affect it.
+- **Revisiting or refreshing the page never resets the clock** — the same QR and the same deadline are shown until it runs out.
+- When the time is up, the QR is hidden and replaced by **"This QR code has expired"** with a **Generate new QR** button. A new QR is only created when the customer asks for it.
+- **No lost last-second payments:**
+  - When the countdown hits zero, the page makes **one final payment check** before declaring the QR expired.
+  - Before issuing a new QR, the server checks the old QR one more time. If the customer paid in its last seconds, the order is marked paid instead of issuing a new code (a new QR has a different MD5, so the old payment would otherwise never be seen).
+- The popup has a **Close** button in both the active and expired states; a **Pay with KHQR** button reopens it, and polling continues in the background while it is closed.
 
-### 8.3 Reliability & safety engineering
-- **Resilience to network issues:** payment-check calls automatically retry on transient connection failures, and fail gracefully (never crash the checkout page) if the payment provider is temporarily unreachable.
-- **Rate/quota protection:** the Bakong payment-check API has a limited daily request quota. The system protects this quota with three independent layers — a shared daily budget, a per-order request throttle, and a capped client-side polling window — so heavy usage from one order or one customer's browser tab can never exhaust the shared daily allowance for everyone else.
-- **Fair background processing:** the automatic background payment checker prioritizes the **newest** unpaid orders first (rather than getting stuck re-checking an old backlog), and ignores orders that have been unpaid for more than 2 hours (treated as abandoned), so real, active customers are never starved behind stale carts.
-- **Manual override:** admins can always mark an order's payment as confirmed manually, as a fallback for when the automatic payment-check service is temporarily unavailable.
+### 8.3 How payment confirmation works
+- While the QR is open, the page **polls the server every 15 seconds** (for up to ~10 minutes).
+- The server only actually calls Bakong's `check_transaction_by_md5` API **at most once per minute per order** — extra polls just return the stored status.
+- On confirmation, the order is set to `paid` with a `payment_confirmed_at` timestamp, and the popup automatically changes to **"Payment successful!"** showing the order number, amount paid, a **Download receipt** button and a **Continue** button (which goes to order history) — no manual refresh required. The page's payment status also switches to **Paid**.
+- A **background scheduled job** (`bakong:check-pending`) runs **every 5 minutes**, so payment confirmation does not depend on the customer keeping their browser tab open.
+- The admin panel shows a **new payment notification count** for orders confirmed since an admin last opened them (`admin_payment_seen_at`).
 
-### 8.4 Testing
-- Automated tests cover QR generation correctness, transaction-check response handling, the daily-budget guard, graceful handling of DNS/network failures, and the background job's prioritization logic — all run against simulated responses, so tests never consume the real payment provider's daily quota.
+### 8.4 Receipts
+- Once an order is **paid**, a PDF receipt is available (generated with DomPDF, A4). Unpaid orders have no receipt — the link returns "not found".
+- The receipt shows: store logo and name, **RECEIPT / PAID** stamp, order number and paid date, billed-to customer details and shipping address, payment method, paid-on date and time, delivery method, each item (name, SKU, quantity, unit price, amount), and subtotal, delivery fee, discount and **total paid**.
+- Where customers can get it:
+  - The **"Payment successful" popup** and the order success page (**Download receipt**).
+  - **Order history**: each paid order has **Receipt** (opens the PDF in a new tab) and **Download receipt**; unpaid orders show "Receipt available after payment".
+  - The **order detail** page: **View receipt** and **Download receipt**.
+- Admins can download the receipt for any paid order from the admin order page.
+- Customers can only see their own receipts; other customers get "forbidden" and guests are sent to log in.
+
+### 8.5 Reliability & safety engineering
+- **Resilience to network issues:** payment-check calls time out after 15 seconds and automatically retry up to 3 times on connection/DNS failures, and fail gracefully (never crash the checkout page) if Bakong is temporarily unreachable.
+- **Rate/quota protection:** Bakong's payment-check API allows only about 100 requests per day for the whole account. The system protects this quota with several layers:
+  - a **shared daily budget** of 90 checks (`BAKONG_DAILY_CHECK_LIMIT`) for all automatic checks;
+  - a **per-order throttle** — at most one live check per minute, and at most one background-job check every 20 minutes;
+  - a **capped client-side polling window** (~10 minutes, then the page stops and tells the customer to refresh later);
+  - checks the customer or admin triggers by hand (the final check after expiry, **Generate new QR**, admin **Verify now**) are allowed once each even if the daily budget is used up, so a real payment is never missed.
+- **Works even if the cache breaks:** if the cache used for these limits is unavailable, the throttle falls back to the user's session, and a payment is still confirmed rather than showing an error.
+- **Fair background processing:** the background job checks at most 5 orders per run, **newest first** (rather than getting stuck re-checking an old backlog), and ignores orders unpaid for more than 2 hours (treated as abandoned), so real, active customers are never starved behind stale carts.
+- **Admin tools:** admins can click **Verify now** to re-check one order against Bakong on demand, or set the payment status to paid manually as a fallback when the Bakong service is unavailable.
+
+### 8.6 Testing
+- Automated tests cover QR generation correctness (TLV fields, CRC, MD5, amount, expiry), transaction-check response handling, the daily-budget guard, DNS/network failures, the 3-minute expiry (no reset on revisit, expired state, regenerate, last-second payment, final check), receipt access (paid only, owner only, inline view and download, admin download), and the background job's prioritization logic.
+- All tests run against simulated Bakong responses, so they never consume the real daily quota. The 76 payment, receipt and admin order tests currently pass.
 
 ---
 
@@ -295,6 +325,7 @@ KHQR is the National Bank of Cambodia's (NBC) standardized QR payment format, al
   - The Bakong/KHQR service layer (QR generation, transaction checking, daily quota guard, network-failure handling).
   - The checkout order-creation flow, including the Bakong payment path.
   - The background payment-checking job's prioritization and time-window logic.
+  - The 3-minute KHQR expiry and regenerate flow, and PDF receipt access (paid orders only, owner or admin only).
 - **Laravel Pint** enforces consistent PHP code style across the codebase.
 - API endpoints have also been manually exercised and documented via Postman during development.
 
