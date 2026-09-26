@@ -1,2213 +1,25 @@
-# User Front (Storefront) — CEC Electronic
+# User Front — CEC Electronic
 
-This document explains how the **customer side** of CEC Electronic works: the home page, browsing, search, product pages, cart, login and registration, checkout with Bakong KHQR payment, the customer account, and receipts. The full source code of every user-front file is included at the end.
+How the customer side of the shop works. Each section covers one feature and contains all of that feature's code.
 
-> Product details (the products table and the admin product pages) are covered in `product.md`.
-
----
-
-## 1. Overview
-
-| Part | Controller / Service | Views |
-|------|----------------------|-------|
-| Home page | `Storefront/HomeController` | `shop/home` |
-| Catalog (category, brand, search, product) | `Storefront/CatalogController` | `shop/category`, `shop/brands`, `shop/product`, `shop/partials/product-card` |
-| Cart | `Storefront/CartController` + `Services/CartService` | `shop/cart` |
-| Login / Register / Logout | `Customer/AuthController` | `account/auth/login`, `account/auth/register` |
-| Checkout and payment | `Storefront/CheckoutController` + `Services/CheckoutService`, `BakongService`, `KhqrGenerator` | `checkout/create`, `checkout/success` |
-| My account and orders | `Customer/AccountController` | `account/dashboard`, `account/orders`, `account/order-show` |
-| Receipt PDF | `Services/ReceiptPdf` | `receipts/order` |
-| Shared layout | — | `shop/layout`, `partials/loading-overlay`, `vendor/pagination/custom` |
-
-Tech: Laravel (Blade views), session-based auth (`Auth::attempt`), a file cache for catalog data, and the Bakong API for payment confirmation.
+| # | Feature | URL |
+|---|---------|-----|
+| 1 | Shop Layout | (all shop pages) |
+| 2 | Home | `/` |
+| 3 | Product & Catalog | `/product/{slug}`, `/category/{slug}`, `/brands`, `/search` |
+| 4 | Cart | `/cart` |
+| 5 | Login & Register | `/login`, `/register` |
+| 6 | Checkout & Payment | `/checkout` |
+| 7 | My Account & Receipt | `/account` |
 
 ---
 
-## 2. Routes (user front)
+## 1. Shop Layout
 
-| Method | URL | Name | Handler | Login required? |
-|--------|-----|------|---------|-----------------|
-| GET | `/` | `shop.home` | `HomeController` | No |
-| GET | `/search?q=` | `shop.search` | `CatalogController@search` | No |
-| GET | `/brands` | `shop.brands` | `CatalogController@brands` | No |
-| GET | `/brands/{slug}` | `shop.brand` | `CatalogController@brand` | No |
-| GET | `/category/{slug}` | `shop.category` | `CatalogController@category` | No |
-| GET | `/product/{slug}` | `shop.product` | `CatalogController@product` | No |
-| GET | `/cart` | `shop.cart` | `CartController@index` | No |
-| POST | `/cart/{product}` | `cart.store` | `CartController@store` | No |
-| PATCH | `/cart/items/{cartItem}` | `cart.update` | `CartController@update` | No (owner only) |
-| DELETE | `/cart/items/{cartItem}` | `cart.destroy` | `CartController@destroy` | No (owner only) |
-| GET | `/checkout` | `checkout.create` | `CheckoutController@create` | **Yes** |
-| POST | `/checkout` | `checkout.store` | `CheckoutController@store` | **Yes** |
-| GET | `/checkout/success/{order}` | `checkout.success` | `CheckoutController@success` | **Yes** (order owner) |
-| POST | `/checkout/regenerate-qr/{order}` | `checkout.regenerate-qr` | `CheckoutController@regenerateQr` | **Yes** |
-| GET | `/checkout/payment-status/{order}` | `checkout.payment-status` | `CheckoutController@paymentStatus` (JSON) | **Yes** |
-| GET/POST | `/login` | `customer.login(.store)` | `AuthController@login` / `authenticate` | — |
-| GET/POST | `/register` | `customer.register(.store)` | `AuthController@register` / `store` | — |
-| POST | `/logout` | `customer.logout` | `AuthController@logout` | — |
-| GET | `/account` | `account.dashboard` | `AccountController@dashboard` | **Yes** |
-| GET | `/account/orders` | `account.orders` | `AccountController@orders` | **Yes** |
-| GET | `/account/orders/{order}` | `account.orders.show` | `AccountController@show` | **Yes** (owner) |
-| GET | `/account/orders/{order}/receipt` | `account.orders.receipt` | download PDF | **Yes** (owner) |
-| GET | `/account/orders/{order}/receipt/view` | `account.orders.receipt.view` | view PDF in the browser | **Yes** (owner) |
+- Shared by all shop pages: header, search bar, category menu, Cart dropdown (Checkout / View history), account menu and footer.
+- Also includes the loading overlay and the custom pagination view (set in `AppServiceProvider`).
 
-> The login, register and logout POST routes skip CSRF checking (`withoutMiddleware(PreventRequestForgery)`).
-
----
-
-## 3. How each part works
-
-### 3.1 Home page (`/`)
-- Loads active categories (ordered by `sort_order`), active brands that have a logo, and the 12 latest active products.
-- If there are no categories yet, it shows placeholder categories: Laptops, Phones and Accessories.
-- The result is cached as `catalog.home` for 300 seconds. The cached value's shape is checked before use, because the file cache can return corrupted data when two requests write at the same time.
-
-### 3.2 Catalog (category, brand, search, product)
-- Only products with `is_active = true` are shown.
-- Sidebar filters (query parameters, all arrays): `category[]`, `brand[]`, `processor[]`, `ram[]`, `storage[]`, `price[]`.
-  - Processor, RAM and storage are matched against the product name and description.
-  - Price buckets: `Under $500`, `$500 - $999`, `$1,000 - $1,499`, `$1,500+`.
-- Search (`?q=`) matches the name, SKU or description.
-- Each result is cached for 300 seconds. The cache key includes a hash of the filters, so one visitor's filters never leak into another visitor's page.
-- The Product model clears the whole cache (`Cache::flush()`) whenever an admin saves or deletes a product.
-
-### 3.3 Cart
-- **Guests** and **logged-in users** can both use the cart:
-  - A guest's cart items are stored by `session_id`.
-  - A logged-in user's cart items are stored by `user_id`.
-- `add()`: if the product is already in the cart, the quantity is increased. `unit_price` is copied from the product's current price.
-- Quantity limit is 1–99. Updating the quantity to 0 or less removes the item.
-- `guardOwner()` returns a **403** error if someone tries to change another user's cart item.
-- **On login or register**, `mergeGuestCartIntoUser()` moves the guest's items into the user's cart and adds up quantities for duplicate products.
-- `CartController@store` returns JSON (for AJAX add to cart, with the new cart count) or redirects back.
-
-### 3.4 Login / Register / Logout
-- **Login:** email + password, with optional "remember me". On success, the session is regenerated, the guest cart is merged, and the user is redirected to the page they were trying to reach (or to `/account`).
-- **Register:** name, a unique email, and a password (at least 8 characters, entered twice to confirm). Earlier guest orders with the same email are **linked to the new account**. The user is logged in automatically and the cart is merged.
-- **Logout:** clears the session and returns to the home page.
-- All three return JSON when the request expects JSON (for AJAX forms).
-
-### 3.5 Checkout and payment (Bakong KHQR)
-
-```
-Cart ──► /checkout (must be logged in, otherwise redirected to /login)
-          │  form: name, email, phone, address, city, province, country, notes
-          ▼
-POST /checkout ──► CheckoutService::createOrder()   (DB transaction)
-          │   • order_number = EH-YYYYMMDD-####
-          │   • status = pending, payment_status = unpaid
-          │   • copies the cart items into order_items
-          │   • clears the cart
-          ▼
-issueQr(): BakongService::generateQrForOrder()
-          │   • builds a KHQR string locally (KhqrGenerator)
-          │   • saves bakong_qr_string, bakong_qr_md5, bakong_qr_expires_at (3 minutes)
-          ▼
-/checkout/success/{order}   ──  shows the QR code and a countdown
-          │   JS polls GET /checkout/payment-status/{order} every 15s
-          ▼
-paymentStatus(): at most one Bakong check per order per 60s (daily API limit)
-          │   + one final check after the QR expires
-          │   paid → payment_status = paid, payment_confirmed_at = now
-          ▼
-QR expired and not paid? → POST /checkout/regenerate-qr
-          (checks the old QR once first, then issues a new one)
-```
-
-Other details:
-- A double-submitted "Place order" (for example a double click) redirects safely to the cart instead of crashing.
-- Revisiting the success page **does not** reset the QR timer.
-- Shipping is currently `0`, so `grand_total = subtotal`.
-
-### 3.6 My account
-- `/account` shows the 10 latest orders. `/account/orders` shows all orders, 10 per page.
-- The order detail page loads the items, delivery provider and delivery zone. Only the order owner can see it (anyone else gets 403).
-- Receipts are generated as a PDF by `ReceiptPdf` from `receipts/order.blade.php`, as a download or viewed in the browser.
-
-### 3.7 Layout
-- `shop/layout.blade.php` contains the header, search bar, category navigation, Cart dropdown (Checkout / View history), account menu, footer and shared JavaScript.
-- `partials/loading-overlay` shows a spinner during page navigation and form submits.
-- `vendor/pagination/custom` is the default pagination view (set in `AppServiceProvider`).
-
----
-
-## 4. Main data models used
-
-| Model | Purpose |
-|-------|---------|
-| `Product` | Items for sale (see `product.md`) |
-| `Category`, `Brand` | Catalog grouping and filters |
-| `CartItem` | One row per product in a cart (`user_id` or `session_id`, `quantity`, `unit_price`, `line_total` accessor) |
-| `Order` | Customer order with totals, shipping address (JSON), payment status and Bakong QR fields |
-| `OrderItem` | A snapshot of each purchased product |
-| `User` | Customer account |
-
----
-
-## 5. Full source code
-
-### 5.1 `routes/web.php`
-
-```php
-<?php
-
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Admin\BrandController as AdminBrandController;
-use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
-use App\Http\Controllers\Admin\AuthController as AdminAuthController;
-use App\Http\Controllers\Admin\CustomerController as AdminCustomerController;
-use App\Http\Controllers\Admin\DeliveryZoneController as AdminDeliveryZoneController;
-use App\Http\Controllers\Admin\OrderController as AdminOrderController;
-use App\Http\Controllers\Admin\ProductController as AdminProductController;
-use App\Http\Controllers\Admin\SupplierController as AdminSupplierController;
-use App\Http\Controllers\Customer\AccountController;
-use App\Http\Controllers\Customer\AuthController as CustomerAuthController;
-use App\Http\Controllers\Storefront\CartController;
-use App\Http\Controllers\Storefront\CatalogController;
-use App\Http\Controllers\Storefront\CheckoutController;
-use App\Http\Controllers\Storefront\HomeController;
-
-Route::get('/', HomeController::class)->name('shop.home');
-Route::get('/search', [CatalogController::class, 'search'])->name('shop.search');
-Route::get('/brands', [CatalogController::class, 'brands'])->name('shop.brands');
-Route::get('/brands/{slug}', [CatalogController::class, 'brand'])->name('shop.brand');
-Route::get('/category/{slug}', [CatalogController::class, 'category'])->name('shop.category');
-Route::get('/product/{slug}', [CatalogController::class, 'product'])->name('shop.product');
-
-Route::get('/cart', [CartController::class, 'index'])->name('shop.cart');
-Route::post('/cart/{product}', [CartController::class, 'store'])->name('cart.store');
-Route::patch('/cart/items/{cartItem}', [CartController::class, 'update'])->name('cart.update');
-Route::delete('/cart/items/{cartItem}', [CartController::class, 'destroy'])->name('cart.destroy');
-
-Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout.create');
-Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
-Route::get('/checkout/success/{order}', [CheckoutController::class, 'success'])->name('checkout.success');
-Route::post('/checkout/regenerate-qr/{order}', [CheckoutController::class, 'regenerateQr'])->name('checkout.regenerate-qr');
-Route::get('/checkout/payment-status/{order}', [CheckoutController::class, 'paymentStatus'])->name('checkout.payment-status');
-
-Route::get('/login', [CustomerAuthController::class, 'login'])->name('customer.login');
-Route::post('/login', [CustomerAuthController::class, 'authenticate'])
-    ->name('customer.login.store')
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
-Route::get('/register', [CustomerAuthController::class, 'register'])->name('customer.register');
-Route::post('/register', [CustomerAuthController::class, 'store'])
-    ->name('customer.register.store')
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
-Route::post('/logout', [CustomerAuthController::class, 'logout'])
-    ->name('customer.logout')
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
-
-Route::prefix('account')->name('account.')->group(function () {
-    Route::get('/', [AccountController::class, 'dashboard'])->name('dashboard');
-    Route::get('/orders', [AccountController::class, 'orders'])->name('orders');
-    Route::get('/orders/{order}', [AccountController::class, 'show'])->name('orders.show');
-    Route::get('/orders/{order}/receipt', [AccountController::class, 'receipt'])->name('orders.receipt');
-    Route::get('/orders/{order}/receipt/view', [AccountController::class, 'viewReceipt'])->name('orders.receipt.view');
-});
-
-Route::get('/admin/login', [AdminAuthController::class, 'create'])->name('admin.login');
-Route::post('/admin/login', [AdminAuthController::class, 'store'])
-    ->name('admin.login.store')
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
-Route::post('/admin/logout', [AdminAuthController::class, 'destroy'])
-    ->name('admin.logout')
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
-
-Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAdminSession::class)->group(function () {
-    Route::get('/', [AdminProductController::class, 'dashboard'])->name('dashboard');
-    Route::resource('products', AdminProductController::class);
-    Route::resource('categories', AdminCategoryController::class)->except(['show']);
-    Route::resource('brands', AdminBrandController::class)->except(['show']);
-    Route::resource('orders', AdminOrderController::class)->only(['index', 'show', 'update']);
-    Route::get('orders/{order}/receipt', [AdminOrderController::class, 'receipt'])->name('orders.receipt');
-    Route::post('orders/{order}/verify-payment', [AdminOrderController::class, 'verifyPayment'])->name('orders.verify-payment');
-    Route::get('customers', [AdminCustomerController::class, 'index'])->name('customers.index');
-    Route::get('customers/{phone}', [AdminCustomerController::class, 'show'])->name('customers.show');
-    Route::resource('suppliers', AdminSupplierController::class)->except(['show']);
-    Route::resource('delivery-zones', AdminDeliveryZoneController::class)->except(['show']);
-});
-```
-
-### 5.2 `app/Http/Controllers/Storefront/HomeController.php`
-
-```php
-<?php
-
-namespace App\Http\Controllers\Storefront;
-
-use App\Http\Controllers\Controller;
-use App\Models\Brand;
-use App\Models\Category;
-use App\Models\Product;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\View\View;
-
-class HomeController extends Controller
-{
-    public function __invoke(): View
-    {
-        $callback = function () {
-            $categories = Category::query()
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->get();
-
-            if ($categories->isEmpty()) {
-                $categories = collect([
-                    (object) ['slug' => 'laptops', 'name' => 'Laptops'],
-                    (object) ['slug' => 'phones', 'name' => 'Phones'],
-                    (object) ['slug' => 'accessories', 'name' => 'Accessories'],
-                ]);
-            }
-
-            return [
-                'categories' => $categories,
-                'brands' => Brand::query()->active()->ordered()->whereNotNull('logo')->get(),
-                'products' => Product::query()
-                    ->where('is_active', true)
-                    ->latest()
-                    ->take(12)
-                    ->get(),
-            ];
-        };
-
-        // The file cache has no atomic lock between concurrent workers: two
-        // simultaneous requests populating a cold key can race and corrupt the
-        // write. unserialize() doesn't always throw on that corruption — it can
-        // silently return the wrong shape — so validate before trusting it.
-        try {
-            $cached = Cache::get('catalog.home');
-        } catch (\Throwable) {
-            $cached = null;
-        }
-
-        $isValid = fn ($v) => is_array($v)
-            && ($v['categories'] ?? null) instanceof Collection
-            && ($v['brands'] ?? null) instanceof Collection
-            && ($v['products'] ?? null) instanceof Collection;
-
-        if ($cached !== null && $isValid($cached)) {
-            $data = $cached;
-        } else {
-            $data = $callback();
-
-            try {
-                Cache::put('catalog.home', $data, 300);
-            } catch (\Throwable) {
-                // Best-effort; if the write fails, the next request just recomputes too.
-            }
-        }
-
-        ['categories' => $categories, 'brands' => $brands, 'products' => $products] = $data;
-
-        return view('shop.home', compact('categories', 'brands', 'products'));
-    }
-}
-```
-
-### 5.3 `app/Http/Controllers/Storefront/CatalogController.php`
-
-```php
-<?php
-
-namespace App\Http\Controllers\Storefront;
-
-use App\Http\Controllers\Controller;
-use App\Models\Brand;
-use App\Models\Category;
-use App\Models\Product;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\View\View;
-
-class CatalogController extends Controller
-{
-    /**
-     * How long to cache catalog reads (category/product/brand listings).
-     * The DB is geographically far from the app, so caching read-heavy,
-     * rarely-changing catalog data avoids paying that round-trip on every view.
-     */
-    private const CACHE_TTL = 300;
-
-    /**
-     * Products don't have dedicated processor/RAM/storage columns, so these
-     * facets are matched against the name/description text.
-     */
-    private const PROCESSOR_KEYWORDS = [
-        'Intel Core' => ['intel', 'core i'],
-        'AMD Ryzen' => ['ryzen', 'amd'],
-        'Apple M series' => ['apple', 'macbook', 'imac', 'm1', 'm2', 'm3', 'm4'],
-    ];
-
-    private const PRICE_RANGES = [
-        'Under $500' => [null, 499.99],
-        '$500 - $999' => [500, 999.99],
-        '$1,000 - $1,499' => [1000, 1499.99],
-        '$1,500+' => [1500, null],
-    ];
-
-    /**
-     * The file cache store has no atomic lock between concurrent workers, so
-     * two simultaneous requests populating the same cold key can race and
-     * corrupt the write. Unlike a locked store, the corruption doesn't always
-     * throw — unserialize() can silently return the wrong shape (e.g. a
-     * __PHP_Incomplete_Class or a string where an object was expected), which
-     * then breaks far downstream in the view. So we validate the shape of
-     * whatever comes back and treat anything unexpected as a miss.
-     */
-    private function cacheRemember(string $key, \Closure $callback, \Closure $isValid): mixed
-    {
-        try {
-            $cached = Cache::get($key);
-        } catch (\Throwable) {
-            $cached = null;
-        }
-
-        if ($cached !== null && $isValid($cached)) {
-            return $cached;
-        }
-
-        $fresh = $callback();
-
-        try {
-            Cache::put($key, $fresh, self::CACHE_TTL);
-        } catch (\Throwable) {
-            // Best-effort; if the write fails, the next request just recomputes too.
-        }
-
-        return $fresh;
-    }
-
-    public function category(string $slug, Request $request): View
-    {
-        $filterKey = $this->filterCacheKey($request);
-
-        ['categoryName' => $categoryName, 'products' => $products] = $this->cacheRemember(
-            "catalog.category.{$slug}.{$filterKey}",
-            function () use ($slug, $request) {
-                $category = Category::where('slug', $slug)->first();
-                $categorySlugs = $request->query('category');
-
-                $query = Product::query()->where('is_active', true);
-
-                if ($categorySlugs !== null) {
-                    // Checkbox filters were submitted; they fully control which categories show.
-                    $query->whereHas('categoryRelation', fn ($q) => $q->whereIn('slug', (array) $categorySlugs));
-                } elseif ($category) {
-                    $query->where('category_id', $category->id);
-                } else {
-                    // Legacy fallback for products still using the plain `category` string column.
-                    $query->where('category', $slug);
-                }
-
-                $this->applyBrandFilter($query, $request);
-                $this->applyFacetFilters($query, $request);
-
-                return [
-                    'categoryName' => $category?->name ?: ucfirst(str_replace('-', ' ', $slug)),
-                    'products' => $query->latest()->get(),
-                ];
-            },
-            fn ($v) => is_array($v) && isset($v['categoryName']) && is_string($v['categoryName'])
-                && ($v['products'] ?? null) instanceof Collection
-        );
-
-        $categories = $this->activeCategories();
-        $brands = $this->activeBrands();
-        $selectedCategories = $request->query('category', [$slug]);
-        $selectedBrands = (array) $request->query('brand', []);
-
-        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
-    }
-
-    public function product(string $slug): View
-    {
-        $product = $this->cacheRemember(
-            "catalog.product.{$slug}",
-            fn () => Product::where('slug', $slug)->firstOrFail(),
-            fn ($v) => $v instanceof Product
-        );
-
-        return view('shop.product', compact('product'));
-    }
-
-    public function search(Request $request): View
-    {
-        $query = trim((string) $request->query('q'));
-        $categoryName = $query ? 'Search: ' . $query : 'Search';
-        $filterKey = $this->filterCacheKey($request);
-
-        $products = $this->cacheRemember(
-            'catalog.search.' . md5($query) . '.' . $filterKey,
-            function () use ($query, $request) {
-                $builder = Product::query()
-                    ->where('is_active', true)
-                    ->when($query, function ($builder) use ($query) {
-                        $builder->where(function ($inner) use ($query) {
-                            $inner->where('name', 'like', "%{$query}%")
-                                ->orWhere('sku', 'like', "%{$query}%")
-                                ->orWhere('description', 'like', "%{$query}%");
-                        });
-                    });
-
-                $this->applyCategoryFilter($builder, $request);
-                $this->applyBrandFilter($builder, $request);
-                $this->applyFacetFilters($builder, $request);
-
-                return $builder->latest()->get();
-            },
-            fn ($v) => $v instanceof Collection
-        );
-
-        $categories = $this->activeCategories();
-        $brands = $this->activeBrands();
-        $selectedCategories = $request->query('category', []);
-        $selectedBrands = (array) $request->query('brand', []);
-
-        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
-    }
-
-    public function brands(): View
-    {
-        $brands = $this->cacheRemember(
-            'catalog.brands.list',
-            fn () => Brand::query()
-                ->active()
-                ->ordered()
-                ->withCount(['products' => fn ($query) => $query->where('is_active', true)])
-                ->get(),
-            fn ($v) => $v instanceof Collection
-        );
-
-        return view('shop.brands', compact('brands'));
-    }
-
-    public function brand(string $slug, Request $request): View
-    {
-        $filterKey = $this->filterCacheKey($request);
-
-        ['brandName' => $brandName, 'products' => $products] = $this->cacheRemember(
-            "catalog.brand.{$slug}.{$filterKey}",
-            function () use ($slug, $request) {
-                $brand = Brand::query()->active()->where('slug', $slug)->first();
-
-                if (! $brand) {
-                    return ['brandName' => null, 'products' => new Collection()];
-                }
-
-                $builder = Product::query()->where('is_active', true);
-
-                if ($request->query('brand') !== null) {
-                    // Sidebar brand checkboxes were submitted; they fully control which brands show.
-                    $this->applyBrandFilter($builder, $request);
-                } else {
-                    $builder->where('brand_id', $brand->id);
-                }
-
-                $this->applyCategoryFilter($builder, $request);
-                $this->applyFacetFilters($builder, $request);
-
-                return ['brandName' => $brand->name, 'products' => $builder->latest()->get()];
-            },
-            fn ($v) => is_array($v) && array_key_exists('brandName', $v)
-                && ($v['brandName'] === null || is_string($v['brandName']))
-                && ($v['products'] ?? null) instanceof Collection
-        );
-
-        abort_if($brandName === null, 404);
-
-        $categoryName = $brandName . ' Products';
-        $categories = $this->activeCategories();
-        $brands = $this->activeBrands();
-        $selectedCategories = $request->query('category', []);
-        $selectedBrands = (array) $request->query('brand', [$slug]);
-
-        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
-    }
-
-    private function applyCategoryFilter(Builder $query, Request $request): void
-    {
-        $categorySlugs = (array) $request->query('category', []);
-
-        if ($categorySlugs) {
-            $query->whereHas('categoryRelation', fn ($q) => $q->whereIn('slug', $categorySlugs));
-        }
-    }
-
-    private function applyBrandFilter(Builder $query, Request $request): void
-    {
-        $brandSlugs = (array) $request->query('brand', []);
-
-        if ($brandSlugs) {
-            $query->whereHas('brand', fn ($q) => $q->whereIn('slug', $brandSlugs));
-        }
-    }
-
-    private function applyFacetFilters(Builder $query, Request $request): void
-    {
-        $processors = (array) $request->query('processor', []);
-        $ramSizes = (array) $request->query('ram', []);
-        $storageSizes = (array) $request->query('storage', []);
-        $priceRanges = (array) $request->query('price', []);
-
-        if ($processors) {
-            $query->where(function ($outer) use ($processors) {
-                foreach ($processors as $label) {
-                    foreach (self::PROCESSOR_KEYWORDS[$label] ?? [] as $keyword) {
-                        $outer->orWhere('name', 'like', "%{$keyword}%")
-                            ->orWhere('description', 'like', "%{$keyword}%");
-                    }
-                }
-            });
-        }
-
-        if ($ramSizes) {
-            $query->where(function ($outer) use ($ramSizes) {
-                foreach ($ramSizes as $size) {
-                    $outer->orWhere('name', 'like', "%{$size}%")
-                        ->orWhere('description', 'like', "%{$size}%");
-                }
-            });
-        }
-
-        if ($storageSizes) {
-            $query->where(function ($outer) use ($storageSizes) {
-                foreach ($storageSizes as $size) {
-                    $outer->orWhere('name', 'like', "%{$size}%")
-                        ->orWhere('description', 'like', "%{$size}%");
-                }
-            });
-        }
-
-        if ($priceRanges) {
-            $query->where(function ($outer) use ($priceRanges) {
-                foreach ($priceRanges as $range) {
-                    [$min, $max] = self::PRICE_RANGES[$range] ?? [null, null];
-                    $outer->orWhere(function ($bounded) use ($min, $max) {
-                        if ($min !== null) {
-                            $bounded->where('price', '>=', $min);
-                        }
-                        if ($max !== null) {
-                            $bounded->where('price', '<=', $max);
-                        }
-                    });
-                }
-            });
-        }
-    }
-
-    /**
-     * Distinguishes cached results across different filter combinations so
-     * one visitor's applied filters can't be served back to another visitor
-     * requesting the same category/search/brand with different filters.
-     */
-    private function filterCacheKey(Request $request): string
-    {
-        $relevant = collect(['processor', 'ram', 'storage', 'price', 'category', 'brand'])
-            ->mapWithKeys(fn ($key) => [
-                $key => collect((array) $request->query($key, []))->sort()->values()->all(),
-            ])
-            ->all();
-
-        return md5(json_encode($relevant));
-    }
-
-    private function activeCategories(): Collection
-    {
-        return $this->cacheRemember(
-            'catalog.categories.active',
-            fn () => Category::where('is_active', true)
-                ->orderBy('sort_order')
-                ->get(['id', 'name', 'slug']),
-            fn ($v) => $v instanceof Collection
-        );
-    }
-
-    private function activeBrands(): Collection
-    {
-        return $this->cacheRemember(
-            'catalog.brands.active',
-            fn () => Brand::query()->active()->ordered()->get(['id', 'name', 'slug']),
-            fn ($v) => $v instanceof Collection
-        );
-    }
-}
-```
-
-### 5.4 `app/Http/Controllers/Storefront/CartController.php`
-
-```php
-<?php
-
-namespace App\Http\Controllers\Storefront;
-
-use App\Http\Controllers\Controller;
-use App\Models\CartItem;
-use App\Models\Product;
-use App\Services\CartService;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\View\View;
-
-class CartController extends Controller
-{
-    public function __construct(private CartService $cartService)
-    {
-    }
-
-    public function index(Request $request): View
-    {
-        $items = $this->cartService->items($request);
-        $subtotal = $this->cartService->subtotal($request);
-
-        return view('shop.cart', compact('items', 'subtotal'));
-    }
-
-    public function store(Request $request, Product $product): RedirectResponse|JsonResponse
-    {
-        $request->merge([
-            'quantity' => $this->normalizeQuantity($request->input('quantity', 1), 1),
-        ]);
-
-        $data = $request->validate([
-            'quantity' => ['nullable', 'integer', 'min:1', 'max:99'],
-        ]);
-
-        $this->cartService->add($request, $product, $data['quantity'] ?? 1);
-
-        if ($request->wantsJson()) {
-            return response()->json([
-                'message' => 'Product added to cart.',
-                'product' => $product->name,
-                'count' => $this->cartService->count($request),
-            ]);
-        }
-
-        return back()->with('status', 'Product added to cart.');
-    }
-
-    public function update(Request $request, CartItem $cartItem): RedirectResponse|JsonResponse
-    {
-        $request->merge([
-            'quantity' => $this->normalizeQuantity($request->input('quantity', 1), 0),
-        ]);
-
-        $data = $request->validate([
-            'quantity' => ['required', 'integer', 'min:0', 'max:99'],
-        ]);
-
-        $this->cartService->updateQuantity($request, $cartItem, $data['quantity']);
-
-        if ($request->wantsJson()) {
-            $removed = $data['quantity'] <= 0;
-
-            return response()->json([
-                'removed' => $removed,
-                'item_id' => $cartItem->id,
-                'quantity' => $removed ? 0 : $cartItem->quantity,
-                'line_total' => $removed ? null : number_format($cartItem->line_total, 2),
-                'subtotal' => number_format($this->cartService->subtotal($request), 2),
-                'count' => $this->cartService->count($request),
-            ]);
-        }
-
-        return back()->with('status', 'Cart updated.');
-    }
-
-    public function destroy(Request $request, CartItem $cartItem): RedirectResponse|JsonResponse
-    {
-        $itemId = $cartItem->id;
-
-        $this->cartService->remove($request, $cartItem);
-
-        if ($request->wantsJson()) {
-            return response()->json([
-                'removed' => true,
-                'item_id' => $itemId,
-                'subtotal' => number_format($this->cartService->subtotal($request), 2),
-                'count' => $this->cartService->count($request),
-            ]);
-        }
-
-        return back()->with('status', 'Item removed.');
-    }
-
-    private function normalizeQuantity(mixed $value, int $minimum): int
-    {
-        if (! is_numeric($value)) {
-            return $minimum;
-        }
-
-        return max($minimum, (int) floor((float) $value));
-    }
-}
-```
-
-### 5.5 `app/Http/Controllers/Storefront/CheckoutController.php`
-
-```php
-<?php
-
-namespace App\Http\Controllers\Storefront;
-
-use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Services\BakongService;
-use App\Services\CartService;
-use App\Services\CheckoutService;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\View\View;
-
-class CheckoutController extends Controller
-{
-    public function __construct(
-        private CartService $cartService,
-        private CheckoutService $checkoutService
-    ) {
-    }
-
-    public function create(Request $request): View|RedirectResponse
-    {
-        if (! $request->user()) {
-            return redirect()
-                ->guest(route('customer.login'))
-                ->with('status', 'Please login or register before checkout.');
-        }
-
-        $items = $this->cartService->items($request);
-        $subtotal = $this->cartService->subtotal($request);
-
-        return view('checkout.create', compact('items', 'subtotal'));
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        if (! $request->user()) {
-            return redirect()
-                ->guest(route('customer.login'))
-                ->with('status', 'Please login or register before checkout.');
-        }
-
-        // A double-submitted "Place order" (double-click, back-button resubmit,
-        // slow-network retry) would otherwise reach CheckoutService with an
-        // already-cleared cart from the first successful submission and crash
-        // with a raw 422 — fail soft here instead, before doing any work.
-        if ($this->cartService->items($request)->isEmpty()) {
-            return redirect()->route('shop.cart')->with('status', 'Your cart is empty.');
-        }
-
-        $data = $request->validate([
-            'customer_name' => ['required', 'string', 'max:255'],
-            'customer_email' => ['nullable', 'email', 'max:255'],
-            'customer_phone' => ['required', 'string', 'max:50'],
-            'address_line_1' => ['required', 'string', 'max:255'],
-            'address_line_2' => ['nullable', 'string', 'max:255'],
-            'city' => ['required', 'string', 'max:100'],
-            'province' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'shipping_method' => ['nullable', 'string', 'max:100'],
-            'payment_method' => ['nullable', 'string', 'max:100'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        $order = $this->checkoutService->createOrder($request, $data);
-
-        if ($order->payment_method === 'bakong') {
-            $this->issueQr($order);
-        }
-
-        return redirect()->route('checkout.success', $order)->with('status', 'Order placed.');
-    }
-
-    public function success(Request $request, Order $order): View
-    {
-        abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
-
-        $order->load('items');
-
-        // The QR closes 3 minutes after it is issued (the deadline is baked into
-        // the KHQR payload, so Bakong's app rejects it too). Never regenerate it
-        // just because the page was revisited — that would reset the clock. Only
-        // orders that have no QR deadline yet (created before the expiry existed)
-        // get a fresh one; after expiry the customer asks for a new QR explicitly.
-        if ($order->payment_method === 'bakong'
-            && $order->payment_status === 'unpaid'
-            && $order->bakong_qr_expires_at === null) {
-            $this->issueQr($order);
-        }
-
-        return view('checkout.success', compact('order'));
-    }
-
-    public function regenerateQr(Request $request, Order $order): RedirectResponse
-    {
-        abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
-
-        if ($order->payment_method !== 'bakong' || $order->payment_status !== 'unpaid' || ! $order->bakongQrExpired()) {
-            return redirect()->route('checkout.success', $order);
-        }
-
-        // A new QR has a different md5, so a payment made on the old QR in its
-        // last minutes would never be seen again. Check the old one once first
-        // (a customer-initiated action, so it may pass the automated daily cap).
-        if ($order->bakong_qr_md5
-            && app(BakongService::class)->checkTransactionByMd5($order->bakong_qr_md5, enforceBudget: false) !== null) {
-            $order->update([
-                'payment_status'       => 'paid',
-                'payment_confirmed_at' => now(),
-            ]);
-
-            return redirect()->route('checkout.success', $order)->with('status', 'Payment received.');
-        }
-
-        $this->issueQr($order);
-
-        return redirect()->route('checkout.success', $order)->with('status', 'A new QR code was generated.');
-    }
-
-    public function paymentStatus(Request $request, Order $order): JsonResponse
-    {
-        abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
-
-        // Bakong's check-transaction API is rate-limited to a small number of
-        // requests per day for the whole store. The checkout page polls this
-        // route every 15s while a tab is open, so throttling outbound Bakong
-        // calls to the same 15s window did nothing — a single customer
-        // leaving a tab open for the ~10 minute polling window could burn
-        // nearly half the daily budget alone. Throttle well below the poll
-        // rate instead, so the UI can still poll for a fast response without
-        // every poll spending part of the shared daily quota.
-        $throttleKey = "bakong-check:{$order->id}";
-
-        if ($order->payment_status === 'unpaid' && $order->bakong_qr_md5) {
-            $checkNow = app(BakongService::class)->allowOnce($throttleKey, 60);
-            $finalCheck = false;
-
-            // A customer can pay in the last seconds of the 3-minute QR window, after
-            // the last throttled check and just before the page stops polling.
-            // Give every order one extra check once its QR has expired so that
-            // payment is still picked up (like regenerateQr, this is
-            // customer-driven and once per order, so it may pass the daily cap).
-            if (! $checkNow && $order->bakongQrExpired()) {
-                $finalCheck = $checkNow = app(BakongService::class)->allowOnce("bakong-final-check:{$order->id}", 86400);
-            }
-
-            if ($checkNow) {
-                $tx = app(BakongService::class)->checkTransactionByMd5(
-                    $order->bakong_qr_md5,
-                    enforceBudget: ! $finalCheck,
-                );
-
-                if ($tx !== null) {
-                    $order->update([
-                        'payment_status'      => 'paid',
-                        'payment_confirmed_at' => now(),
-                    ]);
-                    $order->refresh();
-                }
-            }
-        }
-
-        return response()->json([
-            'order_number' => $order->order_number,
-            'payment_status' => $order->payment_status,
-            'is_paid' => $order->payment_status === 'paid',
-            'paid_at' => $order->payment_confirmed_at?->toIso8601String(),
-            'qr_expired' => $order->payment_status !== 'paid' && $order->bakongQrExpired(),
-        ]);
-    }
-
-    /**
-     * Generate a fixed-amount QR (valid for the configured window) and store the
-     * string, md5 (for payment polling) and deadline on the order.
-     */
-    private function issueQr(Order $order): void
-    {
-        $qrData = app(BakongService::class)->generateQrForOrder($order);
-
-        if ($qrData) {
-            $order->update([
-                'bakong_qr_string'     => $qrData['qr'],
-                'bakong_qr_md5'        => $qrData['md5'],
-                'bakong_qr_expires_at' => $qrData['expires_at'],
-            ]);
-        }
-    }
-}
-```
-
-### 5.6 `app/Http/Controllers/Customer/AuthController.php`
-
-```php
-<?php
-
-namespace App\Http\Controllers\Customer;
-
-use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Models\User;
-use App\Services\CartService;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rules\Password;
-use Illuminate\View\View;
-
-class AuthController extends Controller
-{
-    public function __construct(private CartService $cartService)
-    {
-    }
-
-    public function login(): View
-    {
-        return view('account.auth.login');
-    }
-
-    public function register(): View
-    {
-        return view('account.auth.register');
-    }
-
-    public function authenticate(Request $request): RedirectResponse|JsonResponse
-    {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-        ]);
-
-        $sessionId = $request->session()->getId();
-
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'message' => 'Email or password is incorrect.',
-                    'errors' => ['email' => ['Email or password is incorrect.']],
-                ], 422);
-            }
-
-            return back()
-                ->withErrors(['email' => 'Email or password is incorrect.'])
-                ->onlyInput('email');
-        }
-
-        $request->session()->regenerate();
-        $this->cartService->mergeGuestCartIntoUser($sessionId, $request->user());
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'message' => 'Logged in successfully.',
-                'redirect' => route('account.dashboard'),
-            ]);
-        }
-
-        return redirect()->intended(route('account.dashboard'));
-    }
-
-    public function store(Request $request): RedirectResponse|JsonResponse
-    {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'confirmed', Password::min(8)],
-        ]);
-
-        $sessionId = $request->session()->getId();
-
-        $user = User::create($data);
-
-        Order::query()
-            ->whereNull('user_id')
-            ->where('customer_email', $user->email)
-            ->update(['user_id' => $user->id]);
-
-        Auth::login($user);
-        $request->session()->regenerate();
-        $this->cartService->mergeGuestCartIntoUser($sessionId, $user);
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'message' => 'Account created.',
-                'redirect' => route('account.dashboard'),
-            ]);
-        }
-
-        return redirect()->intended(route('account.dashboard'))->with('status', 'Account created.');
-    }
-
-    public function logout(Request $request): RedirectResponse|JsonResponse
-    {
-        Auth::logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'message' => 'Logged out.',
-                'redirect' => route('shop.home'),
-            ]);
-        }
-
-        return redirect()->route('shop.home')->with('status', 'Logged out.');
-    }
-}
-```
-
-### 5.7 `app/Http/Controllers/Customer/AccountController.php`
-
-```php
-<?php
-
-namespace App\Http\Controllers\Customer;
-
-use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Services\ReceiptPdf;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use Illuminate\View\View;
-
-class AccountController extends Controller
-{
-    public function dashboard(Request $request): View|RedirectResponse
-    {
-        if (! $request->user()) {
-            return redirect()->route('customer.login');
-        }
-
-        $orders = Order::query()
-            ->when($request->user(), fn ($query) => $query->where('user_id', $request->user()->id))
-            ->latest()
-            ->take(10)
-            ->get();
-
-        return view('account.dashboard', compact('orders'));
-    }
-
-    public function orders(Request $request): View|RedirectResponse
-    {
-        if (! $request->user()) {
-            return redirect()->route('customer.login');
-        }
-
-        $orders = Order::query()
-            ->when($request->user(), fn ($query) => $query->where('user_id', $request->user()->id))
-            ->latest()
-            ->paginate(10);
-
-        return view('account.orders', compact('orders'));
-    }
-
-    public function show(Request $request, Order $order): View|RedirectResponse
-    {
-        if (! $request->user()) {
-            return redirect()->route('customer.login');
-        }
-
-        $order->load(['items.product', 'deliveryProvider', 'deliveryZone']);
-
-        if ($order->user_id !== $request->user()->id) {
-            abort(403);
-        }
-
-        return view('account.order-show', compact('order'));
-    }
-
-    public function receipt(Request $request, Order $order, ReceiptPdf $receipts): Response|RedirectResponse
-    {
-        if (! $request->user()) {
-            return redirect()->route('customer.login');
-        }
-
-        abort_unless($order->user_id === $request->user()->id, 403);
-
-        return $receipts->download($order);
-    }
-
-    public function viewReceipt(Request $request, Order $order, ReceiptPdf $receipts): Response|RedirectResponse
-    {
-        if (! $request->user()) {
-            return redirect()->route('customer.login');
-        }
-
-        abort_unless($order->user_id === $request->user()->id, 403);
-
-        return $receipts->stream($order);
-    }
-}
-```
-
-### 5.8 `app/Services/CartService.php`
-
-```php
-<?php
-
-namespace App\Services;
-
-use App\Models\CartItem;
-use App\Models\Product;
-use App\Models\User;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Http\Request;
-
-class CartService
-{
-    /**
-     * Reassign a guest session's cart items to a newly authenticated user,
-     * combining quantities where the user already has the same product.
-     */
-    public function mergeGuestCartIntoUser(string $sessionId, User $user): void
-    {
-        CartItem::query()
-            ->where('session_id', $sessionId)
-            ->get()
-            ->each(function (CartItem $guestItem) use ($user) {
-                $userItem = CartItem::query()
-                    ->where('user_id', $user->id)
-                    ->where('product_id', $guestItem->product_id)
-                    ->first();
-
-                if ($userItem) {
-                    $userItem->increment('quantity', $guestItem->quantity);
-                    $guestItem->delete();
-                } else {
-                    $guestItem->update(['user_id' => $user->id, 'session_id' => null]);
-                }
-            });
-    }
-
-    public function items(Request $request): Collection
-    {
-        return CartItem::query()
-            ->with('product')
-            ->where($this->ownerColumn($request), $this->ownerValue($request))
-            ->latest()
-            ->get();
-    }
-
-    public function add(Request $request, Product $product, int $quantity = 1): CartItem
-    {
-        $ownerColumn = $this->ownerColumn($request);
-        $ownerValue = $this->ownerValue($request);
-
-        $cartItem = CartItem::firstOrNew([
-            $ownerColumn => $ownerValue,
-            'product_id' => $product->id,
-        ]);
-
-        $cartItem->unit_price = $product->price;
-        $cartItem->quantity = (int) $cartItem->quantity + max(1, $quantity);
-        $cartItem->save();
-
-        return $cartItem;
-    }
-
-    public function updateQuantity(Request $request, CartItem $cartItem, int $quantity): void
-    {
-        $this->guardOwner($request, $cartItem);
-
-        if ($quantity <= 0) {
-            $cartItem->delete();
-            return;
-        }
-
-        $cartItem->update(['quantity' => $quantity]);
-    }
-
-    public function remove(Request $request, CartItem $cartItem): void
-    {
-        $this->guardOwner($request, $cartItem);
-        $cartItem->delete();
-    }
-
-    public function subtotal(Request $request): float
-    {
-        return $this->items($request)->sum(fn (CartItem $item) => $item->line_total);
-    }
-
-    public function count(Request $request): int
-    {
-        return (int) $this->items($request)->sum('quantity');
-    }
-
-    public function clear(Request $request): void
-    {
-        CartItem::query()
-            ->where($this->ownerColumn($request), $this->ownerValue($request))
-            ->delete();
-    }
-
-    private function ownerColumn(Request $request): string
-    {
-        return $request->user() ? 'user_id' : 'session_id';
-    }
-
-    private function ownerValue(Request $request): int|string
-    {
-        return $request->user()?->id ?: $request->session()->getId();
-    }
-
-    private function guardOwner(Request $request, CartItem $cartItem): void
-    {
-        abort_unless(
-            $cartItem->{$this->ownerColumn($request)} === $this->ownerValue($request),
-            403
-        );
-    }
-}
-```
-
-### 5.9 `app/Services/CheckoutService.php`
-
-```php
-<?php
-
-namespace App\Services;
-
-use App\Models\CartItem;
-use App\Models\Order;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-
-class CheckoutService
-{
-    public function __construct(private CartService $cartService)
-    {
-    }
-
-    public function createOrder(Request $request, array $data): Order
-    {
-        $items = $this->cartService->items($request);
-        abort_if($items->isEmpty(), 422, 'Cart is empty.');
-
-        return DB::transaction(function () use ($request, $data, $items) {
-            $subtotal = $items->sum(fn (CartItem $item) => $item->line_total);
-            $shippingTotal = 0;
-            $paymentMethod = $data['payment_method'] ?? 'bakong';
-
-            $order = Order::create([
-                'order_number' => $this->orderNumber(),
-                'user_id' => $request->user()?->id,
-                'customer_name' => $data['customer_name'],
-                'customer_email' => $data['customer_email'] ?? $request->user()?->email,
-                'customer_phone' => $data['customer_phone'],
-                'status' => 'pending',
-                'payment_status' => 'unpaid',
-                'payment_confirmed_at' => null,
-                'admin_payment_seen_at' => null,
-                'payment_method' => $paymentMethod,
-                'shipping_method' => $data['shipping_method'] ?? 'standard',
-                'subtotal' => $subtotal,
-                'shipping_total' => $shippingTotal,
-                'discount_total' => 0,
-                'grand_total' => $subtotal + $shippingTotal,
-                'shipping_address' => [
-                    'address_line_1' => $data['address_line_1'],
-                    'address_line_2' => $data['address_line_2'] ?? null,
-                    'city' => $data['city'],
-                    'province' => $data['province'] ?? null,
-                    'country' => $data['country'] ?? 'Cambodia',
-                ],
-                'notes' => $data['notes'] ?? null,
-                'placed_at' => now(),
-            ]);
-
-            foreach ($items as $item) {
-                $order->items()->create([
-                    'product_id' => $item->product_id,
-                    'product_name' => $item->product?->name ?: 'Deleted product',
-                    'sku' => $item->product?->sku,
-                    'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_price,
-                    'line_total' => $item->line_total,
-                ]);
-            }
-
-            $this->cartService->clear($request);
-
-            return $order;
-        });
-    }
-
-    private function orderNumber(): string
-    {
-        do {
-            $number = 'EH-' . now()->format('Ymd') . '-' . random_int(1000, 9999);
-        } while (Order::where('order_number', $number)->exists());
-
-        return $number;
-    }
-}
-```
-
-### 5.10 `app/Services/BakongService.php`
-
-```php
-<?php
-
-namespace App\Services;
-
-use App\Models\Order;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Throwable;
-
-class BakongService
-{
-    private string $baseUrl;
-    private string $accountUsername;
-    private string $accountName;
-    private string $accessToken;
-    private string $merchantCity;
-    private int $dailyCheckLimit;
-    private int $qrExpirySeconds;
-
-    public function __construct()
-    {
-        $this->baseUrl         = rtrim((string) config('services.bakong.base_url', ''), '/');
-        $this->accountUsername = (string) config('services.bakong.account_username', '');
-        $this->accountName     = (string) config('services.bakong.account_name', 'CEC Electronic');
-        $this->accessToken     = (string) config('services.bakong.access_token', '');
-        $this->merchantCity    = (string) config('services.bakong.merchant_city', 'Phnom Penh');
-        $this->dailyCheckLimit = (int) config('services.bakong.daily_check_limit', 90);
-        $this->qrExpirySeconds = max(1, (int) config('services.bakong.qr_expiry_seconds', 180));
-    }
-
-    public function isConfigured(): bool
-    {
-        return $this->accountUsername !== '';
-    }
-
-    private function http(): PendingRequest
-    {
-        // DNS to Bakong's API intermittently fails to resolve inside this
-        // network — retry a couple of times before giving up on a single check.
-        // throw: false keeps a plain non-2xx response (e.g. "not found") as a
-        // normal response object instead of turning it into an exception —
-        // only connection-level failures (DNS, timeout) should be retried/thrown.
-        return Http::timeout(15)->retry(3, 500, throw: false)->acceptJson()->withToken($this->accessToken);
-    }
-
-    /**
-     * Generate a fixed-amount KHQR string for an order — computed locally
-     * following the NBC KHQR SDK spec, no API call needed.
-     * Returns ['qr' => string, 'md5' => string, 'expires_at' => Carbon] or null if not configured.
-     * The QR is only valid for services.bakong.qr_expiry_seconds (default 180 = 3 minutes).
-     */
-    public function generateQrForOrder(Order $order): ?array
-    {
-        if (! $this->isConfigured()) {
-            return null;
-        }
-
-        $qr = KhqrGenerator::individual(
-            accountId:      $this->accountUsername,
-            merchantName:   $this->accountName,
-            merchantCity:   $this->merchantCity,
-            amount:         (float) $order->grand_total,
-            currency:       'USD',
-            billNumber:     $order->order_number,
-            expirationSeconds: $this->qrExpirySeconds,
-        );
-
-        return [
-            'qr'         => $qr['qr'],
-            'md5'        => $qr['md5'],
-            'expires_at' => Carbon::createFromTimestamp($qr['expires_at']),
-        ];
-    }
-
-    /**
-     * Verify a payment against the official Bakong Open API using the MD5
-     * hash of the KHQR string. Returns the transaction data once paid, or
-     * null while unpaid / not yet found.
-     *
-     * Bakong caps this endpoint at a small number of requests per day for
-     * the whole account. A shared daily counter guards every caller (live
-     * customer polling and the background job alike) so the app can never
-     * exceed that cap and get every pending order stuck until it resets.
-     */
-    /**
-     * $enforceBudget can be set false for a deliberate, human-initiated check
-     * (e.g. an admin clicking "verify now" on one order) — those are
-     * naturally rate-limited by a person clicking a button, unlike automated
-     * polling, so they're allowed past the shared daily cap that protects
-     * against runaway automated usage. The check still counts toward the
-     * shared counter so automated callers see accurate usage.
-     */
-    public function checkTransactionByMd5(string $md5, bool $enforceBudget = true): ?array
-    {
-        if ($this->baseUrl === '' || $this->accessToken === '') {
-            return null;
-        }
-
-        if ($enforceBudget && $this->dailyBudgetExceeded()) {
-            return null;
-        }
-
-        $this->recordDailyCheck();
-
-        try {
-            $response = $this->http()->post("{$this->baseUrl}/check_transaction_by_md5", [
-                'md5' => $md5,
-            ]);
-        } catch (ConnectionException $e) {
-            // Network/DNS hiccup reaching Bakong — treat as "not confirmed yet"
-            // rather than blowing up the request; the next poll/job run retries.
-            Log::warning('Bakong check_transaction_by_md5 connection failed', [
-                'md5' => $md5,
-                'message' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
-
-        if (! $response->successful() || $response->json('responseCode') !== 0) {
-            return null;
-        }
-
-        return $response->json('data');
-    }
-
-    /**
-     * True the first time it is called for $key within $seconds — a throttle
-     * that protects the shared Bakong quota. It must never stop a payment being
-     * confirmed, so if the cache is unavailable (e.g. an unwritable cache
-     * folder) it falls back to a per-session throttle instead of throwing, and
-     * allows the call outright where there is no session (console/queue).
-     */
-    public function allowOnce(string $key, int $seconds): bool
-    {
-        try {
-            return Cache::add($key, true, $seconds);
-        } catch (Throwable $e) {
-            Log::warning('Bakong throttle cache unavailable, using session fallback', ['message' => $e->getMessage()]);
-        }
-
-        $request = request();
-
-        if (! $request->hasSession()) {
-            return true;
-        }
-
-        $sessionKey = 'bakong_throttle.'.md5($key);
-        $last = (int) $request->session()->get($sessionKey, 0);
-
-        if ($last > 0 && (time() - $last) < $seconds) {
-            return false;
-        }
-
-        $request->session()->put($sessionKey, time());
-
-        return true;
-    }
-
-    private function dailyBudgetExceeded(): bool
-    {
-        if ($this->dailyCheckLimit <= 0) {
-            return false;
-        }
-
-        try {
-            return (int) Cache::get($this->dailyBudgetKey(), 0) >= $this->dailyCheckLimit;
-        } catch (Throwable $e) {
-            // The counter only protects the daily quota. An unwritable cache
-            // must never stop a customer's payment from being confirmed.
-            Log::warning('Bakong daily budget counter unavailable', ['message' => $e->getMessage()]);
-
-            return false;
-        }
-    }
-
-    private function recordDailyCheck(): void
-    {
-        try {
-            $key = $this->dailyBudgetKey();
-
-            Cache::add($key, 0, now()->endOfDay()->addSecond());
-            Cache::increment($key);
-        } catch (Throwable $e) {
-            Log::warning('Bakong daily budget counter unavailable', ['message' => $e->getMessage()]);
-        }
-    }
-
-    private function dailyBudgetKey(): string
-    {
-        return 'bakong:daily-checks:' . now()->toDateString();
-    }
-}
-```
-
-### 5.11 `app/Services/KhqrGenerator.php`
-
-```php
-<?php
-
-namespace App\Services;
-
-/**
- * Generates KHQR (EMV QR) strings locally following the NBC KHQR SDK specification.
- * No external API call required — everything is computed on the server.
- */
-class KhqrGenerator
-{
-    private static function field(string $tag, string $value): string
-    {
-        return $tag . str_pad(strlen($value), 2, '0', STR_PAD_LEFT) . $value;
-    }
-
-    private static function crc16(string $data): string
-    {
-        $crc = 0xFFFF;
-        for ($i = 0, $len = strlen($data); $i < $len; $i++) {
-            $crc ^= ord($data[$i]) << 8;
-            for ($j = 0; $j < 8; $j++) {
-                $crc = ($crc & 0x8000)
-                    ? (($crc << 1) ^ 0x1021) & 0xFFFF
-                    : ($crc << 1) & 0xFFFF;
-            }
-        }
-        return strtoupper(str_pad(dechex($crc), 4, '0', STR_PAD_LEFT));
-    }
-
-    /**
-     * Generate a dynamic individual KHQR string with a fixed amount.
-     *
-     * @return array{qr: string, md5: string, expires_at: int} expires_at is a unix timestamp (seconds)
-     */
-    public static function individual(
-        string $accountId,
-        string $merchantName,
-        string $merchantCity = 'Phnom Penh',
-        float  $amount = 0,
-        string $currency = 'USD',
-        string $billNumber = '',
-        int    $expirationSeconds = 86400
-    ): array {
-        $currencyCode = strtoupper($currency) === 'KHR' ? '116' : '840';
-
-        // Tag 29 — individual account info
-        $merchantAccount = self::field('29', self::field('00', $accountId));
-
-        // Tag 62 — additional data (bill number)
-        $additional = $billNumber
-            ? self::field('62', self::field('01', substr($billNumber, 0, 25)))
-            : '';
-
-        // Tag 99 — KHQR timestamps in milliseconds
-        $nowMs = (int) (microtime(true) * 1000);
-        $expMs = $nowMs + ($expirationSeconds * 1000);
-        $timestamps = self::field('99',
-            self::field('00', (string) $nowMs) .
-            self::field('01', (string) $expMs)
-        );
-
-        // Amount string — strip trailing zeros after decimal
-        $amountField = '';
-        if ($amount > 0) {
-            $formatted = number_format($amount, 2, '.', '');
-            $amountField = self::field('54', rtrim(rtrim($formatted, '0'), '.'));
-        }
-
-        $qr  = self::field('00', '01');                          // Payload Format Indicator
-        $qr .= self::field('01', '12');                          // Point of Initiation (dynamic)
-        $qr .= $merchantAccount;                                  // Merchant Account
-        $qr .= self::field('52', '5999');                        // MCC
-        $qr .= self::field('53', $currencyCode);                 // Currency
-        $qr .= $amountField;                                      // Amount
-        $qr .= self::field('58', 'KH');                          // Country Code
-        $qr .= self::field('59', mb_substr($merchantName, 0, 25)); // Merchant Name
-        $qr .= self::field('60', mb_substr($merchantCity, 0, 15)); // Merchant City
-        $qr .= $additional;                                       // Bill Number
-        $qr .= $timestamps;                                       // Timestamps
-        $qr .= '6304';                                            // CRC tag + length placeholder
-
-        $crc    = self::crc16($qr);
-        $qrFull = $qr . $crc;
-
-        return [
-            'qr'  => $qrFull,
-            'md5' => md5($qrFull),
-            'expires_at' => intdiv($expMs, 1000),
-        ];
-    }
-}
-```
-
-### 5.12 `app/Services/ReceiptPdf.php`
-
-```php
-<?php
-
-namespace App\Services;
-
-use App\Models\Order;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Response;
-
-class ReceiptPdf
-{
-    /**
-     * A receipt only exists once payment is confirmed; unpaid orders 404.
-     */
-    public function download(Order $order): Response
-    {
-        return $this->pdf($order)->download($this->filename($order));
-    }
-
-    /**
-     * Same receipt, opened in the browser instead of saved.
-     */
-    public function stream(Order $order): Response
-    {
-        return $this->pdf($order)->stream($this->filename($order));
-    }
-
-    private function pdf(Order $order)
-    {
-        abort_unless($order->payment_status === 'paid', 404);
-
-        $order->loadMissing('items', 'deliveryProvider');
-
-        return Pdf::loadView('receipts.order', compact('order'))->setPaper('a4');
-    }
-
-    private function filename(Order $order): string
-    {
-        return 'receipt-'.$order->order_number.'.pdf';
-    }
-}
-```
-
-### 5.13 `app/Models/Product.php`
-
-```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
-
-class Product extends Model
-{
-    use HasFactory;
-
-    protected static function booted(): void
-    {
-        // Storefront catalog/home pages cache reads under dynamic per-filter
-        // keys (see CatalogController::cacheRemember), so there's no single
-        // key to target here — flush the whole cache store instead so admin
-        // edits show up immediately rather than waiting out the TTL.
-        static::saved(fn () => Cache::flush());
-        static::deleted(fn () => Cache::flush());
-    }
-
-    protected $fillable = [
-        'category_id',
-        'brand_id',
-        'supplier_id',
-        'name',
-        'slug',
-        'sku',
-        'description',
-        'price',
-        'compare_at_price',
-        'cost_price',
-        'stock_quantity',
-        'is_active',
-        'is_featured',
-        'image',
-        'images',
-        'specifications',
-        'category',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'images' => 'array',
-            'specifications' => 'array',
-            'is_active' => 'boolean',
-            'is_featured' => 'boolean',
-            'price' => 'decimal:2',
-            'compare_at_price' => 'decimal:2',
-            'cost_price' => 'decimal:2',
-            'stock_quantity' => 'integer',
-        ];
-    }
-
-    public function categoryRelation(): BelongsTo
-    {
-        return $this->belongsTo(Category::class, 'category_id');
-    }
-
-    public function brand(): BelongsTo
-    {
-        return $this->belongsTo(Brand::class);
-    }
-
-    public function supplier(): BelongsTo
-    {
-        return $this->belongsTo(Supplier::class);
-    }
-
-    public function cartItems(): HasMany
-    {
-        return $this->hasMany(CartItem::class);
-    }
-
-    public function orderItems(): HasMany
-    {
-        return $this->hasMany(OrderItem::class);
-    }
-
-    public function getDisplayCategoryAttribute(): string
-    {
-        return $this->categoryRelation?->name ?: ucfirst((string) $this->category);
-    }
-
-    public function getImageUrlAttribute(): string
-    {
-        if (! $this->image) {
-            return asset('images/product-placeholder.svg');
-        }
-
-        if (Str::startsWith($this->image, ['http://', 'https://', '/'])) {
-            return $this->image;
-        }
-
-        if (Str::startsWith($this->image, 'images/')) {
-            return asset($this->image);
-        }
-
-        // asset() (not Storage::disk('public')->url()) so this resolves against
-        // the actual request host, matching how the rest of the app derives URLs
-        // instead of depending on APP_URL (see commit a6d3a8b).
-        return asset('storage/' . $this->image);
-    }
-}
-```
-
-### 5.14 `app/Models/Category.php`
-
-```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
-
-class Category extends Model
-{
-    use HasFactory;
-
-    protected static function booted(): void
-    {
-        // See Product::booted() — same reasoning: no single cache key to
-        // target for the storefront's dynamic catalog cache keys.
-        static::saved(fn () => Cache::flush());
-        static::deleted(fn () => Cache::flush());
-    }
-
-    protected $fillable = [
-        'parent_id',
-        'name',
-        'slug',
-        'description',
-        'image',
-        'is_active',
-        'sort_order',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'is_active' => 'boolean',
-        ];
-    }
-
-    public function parent(): BelongsTo
-    {
-        return $this->belongsTo(Category::class, 'parent_id');
-    }
-
-    public function children(): HasMany
-    {
-        return $this->hasMany(Category::class, 'parent_id');
-    }
-
-    public function products(): HasMany
-    {
-        return $this->hasMany(Product::class);
-    }
-
-    public function getImageUrlAttribute(): string
-    {
-        if (! $this->image) {
-            return asset('images/product-placeholder.svg');
-        }
-
-        if (Str::startsWith($this->image, ['http://', 'https://', '/'])) {
-            return $this->image;
-        }
-
-        if (Str::startsWith($this->image, 'images/')) {
-            return asset($this->image);
-        }
-
-        // asset() (not Storage::disk('public')->url()) so this resolves against
-        // the actual request host, matching how the rest of the app derives URLs
-        // instead of depending on APP_URL (see commit a6d3a8b).
-        return asset('storage/' . $this->image);
-    }
-}
-```
-
-### 5.15 `app/Models/Brand.php`
-
-```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
-
-class Brand extends Model
-{
-    use HasFactory;
-
-    protected static function booted(): void
-    {
-        // See Product::booted() — same reasoning: no single cache key to
-        // target for the storefront's dynamic catalog cache keys.
-        static::saved(fn () => Cache::flush());
-        static::deleted(fn () => Cache::flush());
-    }
-
-    protected $fillable = [
-        'name',
-        'slug',
-        'logo',
-        'is_active',
-        'sort_order',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'is_active' => 'boolean',
-        ];
-    }
-
-    public function scopeActive(Builder $query): void
-    {
-        $query->where('is_active', true);
-    }
-
-    public function scopeOrdered(Builder $query): void
-    {
-        $query->orderBy('sort_order')->orderBy('name');
-    }
-
-    public function products(): HasMany
-    {
-        return $this->hasMany(Product::class);
-    }
-
-    public function getInitialsAttribute(): string
-    {
-        return Str::of($this->name)->substr(0, 2)->upper()->toString();
-    }
-
-    public function getLogoUrlAttribute(): ?string
-    {
-        if (! $this->logo) {
-            return null;
-        }
-
-        if (Str::startsWith($this->logo, ['http://', 'https://', '/'])) {
-            return $this->logo;
-        }
-
-        if (Str::startsWith($this->logo, 'images/')) {
-            return asset($this->logo);
-        }
-
-        // asset() rather than Storage::url() — see Category::getImageUrlAttribute().
-        return asset('storage/' . $this->logo);
-    }
-}
-```
-
-### 5.16 `app/Models/CartItem.php`
-
-```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
-class CartItem extends Model
-{
-    use HasFactory;
-
-    protected $fillable = [
-        'user_id',
-        'session_id',
-        'product_id',
-        'quantity',
-        'unit_price',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'quantity' => 'integer',
-            'unit_price' => 'decimal:2',
-        ];
-    }
-
-    public function product(): BelongsTo
-    {
-        return $this->belongsTo(Product::class);
-    }
-
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    public function getLineTotalAttribute(): float
-    {
-        return $this->quantity * (float) $this->unit_price;
-    }
-}
-```
-
-### 5.17 `app/Models/Order.php`
-
-```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-
-class Order extends Model
-{
-    use HasFactory;
-
-    protected $fillable = [
-        'order_number',
-        'user_id',
-        'customer_name',
-        'customer_email',
-        'customer_phone',
-        'status',
-        'payment_status',
-        'payment_confirmed_at',
-        'admin_payment_seen_at',
-        'payment_method',
-        'bakong_session_id',
-        'bakong_checkout_url',
-        'bakong_qr_string',
-        'bakong_qr_md5',
-        'bakong_qr_expires_at',
-        'shipping_method',
-        'delivery_zone_id',
-        'delivery_provider_id',
-        'tracking_number',
-        'shipped_at',
-        'delivered_at',
-        'subtotal',
-        'shipping_total',
-        'discount_total',
-        'grand_total',
-        'shipping_address',
-        'notes',
-        'placed_at',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'shipping_address' => 'array',
-            'subtotal' => 'decimal:2',
-            'shipping_total' => 'decimal:2',
-            'discount_total' => 'decimal:2',
-            'grand_total' => 'decimal:2',
-            'placed_at' => 'datetime',
-            'payment_confirmed_at' => 'datetime',
-            'bakong_qr_expires_at' => 'datetime',
-            'admin_payment_seen_at' => 'datetime',
-            'shipped_at' => 'datetime',
-            'delivered_at' => 'datetime',
-        ];
-    }
-
-    public function bakongQrExpired(): bool
-    {
-        return $this->bakong_qr_expires_at !== null && $this->bakong_qr_expires_at->isPast();
-    }
-
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    public function items(): HasMany
-    {
-        return $this->hasMany(OrderItem::class);
-    }
-
-    public function deliveryZone(): BelongsTo
-    {
-        return $this->belongsTo(DeliveryZone::class);
-    }
-
-    public function deliveryProvider(): BelongsTo
-    {
-        return $this->belongsTo(DeliveryProvider::class);
-    }
-
-    public function shipments(): HasMany
-    {
-        return $this->hasMany(Shipment::class);
-    }
-}
-```
-
-### 5.18 `app/Models/OrderItem.php`
-
-```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
-class OrderItem extends Model
-{
-    protected $fillable = [
-        'order_id',
-        'product_id',
-        'product_name',
-        'sku',
-        'quantity',
-        'unit_price',
-        'line_total',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'quantity' => 'integer',
-            'unit_price' => 'decimal:2',
-            'line_total' => 'decimal:2',
-        ];
-    }
-
-    public function order(): BelongsTo
-    {
-        return $this->belongsTo(Order::class);
-    }
-
-    public function product(): BelongsTo
-    {
-        return $this->belongsTo(Product::class);
-    }
-}
-```
-
-### 5.19 `app/Models/User.php`
-
-```php
-<?php
-
-namespace App\Models;
-
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-
-#[Fillable(['name', 'email', 'password', 'is_admin'])]
-#[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
-{
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_admin' => 'boolean',
-        ];
-    }
-
-    public function addresses(): HasMany
-    {
-        return $this->hasMany(CustomerAddress::class);
-    }
-
-    public function cartItems(): HasMany
-    {
-        return $this->hasMany(CartItem::class);
-    }
-
-    public function orders(): HasMany
-    {
-        return $this->hasMany(Order::class);
-    }
-}
-```
-
-### 5.20 `resources/views/shop/layout.blade.php`
+### 1.1 `resources/views/shop/layout.blade.php`
 
 ```blade
 <!doctype html>
@@ -2871,7 +683,227 @@ class User extends Authenticatable
 </html>
 ```
 
-### 5.21 `resources/views/shop/home.blade.php`
+### 1.2 `resources/views/partials/loading-overlay.blade.php`
+
+```blade
+<style>
+    .page-loader{position:fixed;inset:0;background:rgba(255,255,255,.72);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;visibility:hidden;transition:opacity .15s ease}
+    .page-loader.is-active{opacity:1;visibility:visible}
+    .page-loader-box{display:flex;flex-direction:column;align-items:center;gap:12px}
+    .page-loader-spinner{width:44px;height:44px;border-radius:50%;border:4px solid var(--line,#dde5f0);border-top-color:var(--brand,#0057a8);animation:page-loader-spin .7s linear infinite}
+    .page-loader-text{font-weight:800;color:var(--brand,#0057a8);font-size:13px;letter-spacing:.02em}
+    @keyframes page-loader-spin{to{transform:rotate(360deg)}}
+</style>
+
+<div id="page-loader" class="page-loader" aria-hidden="true">
+    <div class="page-loader-box">
+        <span class="page-loader-spinner"></span>
+        <span class="page-loader-text">Loading…</span>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var loader = document.getElementById('page-loader');
+        if (! loader) return;
+
+        var hideTimer;
+
+        function showLoader() {
+            loader.classList.add('is-active');
+            loader.setAttribute('aria-hidden', 'false');
+            // Safety net: a page that never finishes navigating (dropped
+            // connection, blocked request) would otherwise leave the
+            // overlay stuck forever.
+            window.clearTimeout(hideTimer);
+            hideTimer = window.setTimeout(hideLoader, 8000);
+        }
+
+        function hideLoader() {
+            loader.classList.remove('is-active');
+            loader.setAttribute('aria-hidden', 'true');
+            window.clearTimeout(hideTimer);
+        }
+
+        window.PageLoader = { show: showLoader, hide: hideLoader };
+
+        document.addEventListener('click', function (event) {
+            if (event.defaultPrevented || event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+            var link = event.target.closest('a[href]');
+            if (! link || link.dataset.noLoader !== undefined) return;
+            if (link.target === '_blank' || link.hasAttribute('download')) return;
+
+            var href = link.getAttribute('href') || '';
+            if (! href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+            var url;
+            try {
+                url = new URL(link.href, window.location.href);
+            } catch (e) {
+                return;
+            }
+
+            if (url.origin !== window.location.origin) return;
+            // A link to the same page that only changes the hash (in-page anchor) doesn't navigate.
+            if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
+
+            showLoader();
+        });
+
+        document.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (event.defaultPrevented) return;
+            if (form.dataset.noLoader !== undefined) return;
+            // AJAX forms (add-to-cart, etc.) manage their own loading state.
+            if (form.hasAttribute('data-cart-add')) return;
+
+            showLoader();
+        });
+
+        // Restores from the browser's back/forward cache arrive with the
+        // page already rendered, so any loader left over from before must
+        // be cleared instead of sitting on screen.
+        window.addEventListener('pageshow', hideLoader);
+    })();
+</script>
+```
+
+### 1.3 `resources/views/vendor/pagination/custom.blade.php`
+
+```blade
+@if ($paginator->hasPages())
+    <nav class="pager" role="navigation" aria-label="{{ __('Pagination Navigation') }}">
+        @if ($paginator->onFirstPage())
+            <span class="btn secondary pager-nav disabled" aria-disabled="true">&larr; Back</span>
+        @else
+            <a class="btn secondary pager-nav" href="{{ $paginator->previousPageUrl() }}" rel="prev">&larr; Back</a>
+        @endif
+
+        <div class="pager-pages">
+            @foreach ($elements as $element)
+                @if (is_string($element))
+                    <span class="pager-dots">{{ $element }}</span>
+                @endif
+
+                @if (is_array($element))
+                    @foreach ($element as $page => $url)
+                        @if ($page == $paginator->currentPage())
+                            <span class="pager-page active" aria-current="page">{{ $page }}</span>
+                        @else
+                            <a class="pager-page" href="{{ $url }}">{{ $page }}</a>
+                        @endif
+                    @endforeach
+                @endif
+            @endforeach
+        </div>
+
+        @if ($paginator->hasMorePages())
+            <a class="btn pager-nav" href="{{ $paginator->nextPageUrl() }}" rel="next">Next &rarr;</a>
+        @else
+            <span class="btn pager-nav disabled" aria-disabled="true">Next &rarr;</span>
+        @endif
+    </nav>
+
+    <p class="pager-summary">
+        Showing {{ $paginator->firstItem() }}&ndash;{{ $paginator->lastItem() }} of {{ $paginator->total() }}
+    </p>
+@endif
+```
+
+---
+
+## 2. Home
+
+- Shows active categories, active brands that have a logo, and the 12 newest active products.
+- The result is cached for 5 minutes (`catalog.home`).
+
+**Routes** (`routes/web.php`)
+
+```php
+Route::get('/', HomeController::class)->name('shop.home');
+```
+
+### 2.1 `app/Http/Controllers/Storefront/HomeController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers\Storefront;
+
+use App\Http\Controllers\Controller;
+use App\Models\Brand;
+use App\Models\Category;
+use App\Models\Product;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\View\View;
+
+class HomeController extends Controller
+{
+    public function __invoke(): View
+    {
+        $callback = function () {
+            $categories = Category::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->get();
+
+            if ($categories->isEmpty()) {
+                $categories = collect([
+                    (object) ['slug' => 'laptops', 'name' => 'Laptops'],
+                    (object) ['slug' => 'phones', 'name' => 'Phones'],
+                    (object) ['slug' => 'accessories', 'name' => 'Accessories'],
+                ]);
+            }
+
+            return [
+                'categories' => $categories,
+                'brands' => Brand::query()->active()->ordered()->whereNotNull('logo')->get(),
+                'products' => Product::query()
+                    ->where('is_active', true)
+                    ->latest()
+                    ->take(12)
+                    ->get(),
+            ];
+        };
+
+        // The file cache has no atomic lock between concurrent workers: two
+        // simultaneous requests populating a cold key can race and corrupt the
+        // write. unserialize() doesn't always throw on that corruption — it can
+        // silently return the wrong shape — so validate before trusting it.
+        try {
+            $cached = Cache::get('catalog.home');
+        } catch (\Throwable) {
+            $cached = null;
+        }
+
+        $isValid = fn ($v) => is_array($v)
+            && ($v['categories'] ?? null) instanceof Collection
+            && ($v['brands'] ?? null) instanceof Collection
+            && ($v['products'] ?? null) instanceof Collection;
+
+        if ($cached !== null && $isValid($cached)) {
+            $data = $cached;
+        } else {
+            $data = $callback();
+
+            try {
+                Cache::put('catalog.home', $data, 300);
+            } catch (\Throwable) {
+                // Best-effort; if the write fails, the next request just recomputes too.
+            }
+        }
+
+        ['categories' => $categories, 'brands' => $brands, 'products' => $products] = $data;
+
+        return view('shop.home', compact('categories', 'brands', 'products'));
+    }
+}
+```
+
+### 2.2 `resources/views/shop/home.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -3043,7 +1075,699 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.22 `resources/views/shop/category.blade.php`
+---
+
+## 3. Product & Catalog
+
+- Category, brand, search and product detail pages. Only products with `is_active = true` are shown.
+- Filters: `category[]`, `brand[]`, `processor[]`, `ram[]`, `storage[]`, `price[]`.
+- Results are cached for 5 minutes. Each cache key includes a hash of the filters.
+
+**Routes** (`routes/web.php`)
+
+```php
+Route::get('/search', [CatalogController::class, 'search'])->name('shop.search');
+Route::get('/brands', [CatalogController::class, 'brands'])->name('shop.brands');
+Route::get('/brands/{slug}', [CatalogController::class, 'brand'])->name('shop.brand');
+Route::get('/category/{slug}', [CatalogController::class, 'category'])->name('shop.category');
+Route::get('/product/{slug}', [CatalogController::class, 'product'])->name('shop.product');
+```
+
+### 3.1 `app/Http/Controllers/Storefront/CatalogController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers\Storefront;
+
+use App\Http\Controllers\Controller;
+use App\Models\Brand;
+use App\Models\Category;
+use App\Models\Product;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\View\View;
+
+class CatalogController extends Controller
+{
+    /**
+     * How long to cache catalog reads (category/product/brand listings).
+     * The DB is geographically far from the app, so caching read-heavy,
+     * rarely-changing catalog data avoids paying that round-trip on every view.
+     */
+    private const CACHE_TTL = 300;
+
+    /**
+     * Products don't have dedicated processor/RAM/storage columns, so these
+     * facets are matched against the name/description text.
+     */
+    private const PROCESSOR_KEYWORDS = [
+        'Intel Core' => ['intel', 'core i'],
+        'AMD Ryzen' => ['ryzen', 'amd'],
+        'Apple M series' => ['apple', 'macbook', 'imac', 'm1', 'm2', 'm3', 'm4'],
+    ];
+
+    private const PRICE_RANGES = [
+        'Under $500' => [null, 499.99],
+        '$500 - $999' => [500, 999.99],
+        '$1,000 - $1,499' => [1000, 1499.99],
+        '$1,500+' => [1500, null],
+    ];
+
+    /**
+     * The file cache store has no atomic lock between concurrent workers, so
+     * two simultaneous requests populating the same cold key can race and
+     * corrupt the write. Unlike a locked store, the corruption doesn't always
+     * throw — unserialize() can silently return the wrong shape (e.g. a
+     * __PHP_Incomplete_Class or a string where an object was expected), which
+     * then breaks far downstream in the view. So we validate the shape of
+     * whatever comes back and treat anything unexpected as a miss.
+     */
+    private function cacheRemember(string $key, \Closure $callback, \Closure $isValid): mixed
+    {
+        try {
+            $cached = Cache::get($key);
+        } catch (\Throwable) {
+            $cached = null;
+        }
+
+        if ($cached !== null && $isValid($cached)) {
+            return $cached;
+        }
+
+        $fresh = $callback();
+
+        try {
+            Cache::put($key, $fresh, self::CACHE_TTL);
+        } catch (\Throwable) {
+            // Best-effort; if the write fails, the next request just recomputes too.
+        }
+
+        return $fresh;
+    }
+
+    public function category(string $slug, Request $request): View
+    {
+        $filterKey = $this->filterCacheKey($request);
+
+        ['categoryName' => $categoryName, 'products' => $products] = $this->cacheRemember(
+            "catalog.category.{$slug}.{$filterKey}",
+            function () use ($slug, $request) {
+                $category = Category::where('slug', $slug)->first();
+                $categorySlugs = $request->query('category');
+
+                $query = Product::query()->where('is_active', true);
+
+                if ($categorySlugs !== null) {
+                    // Checkbox filters were submitted; they fully control which categories show.
+                    $query->whereHas('categoryRelation', fn ($q) => $q->whereIn('slug', (array) $categorySlugs));
+                } elseif ($category) {
+                    $query->where('category_id', $category->id);
+                } else {
+                    // Legacy fallback for products still using the plain `category` string column.
+                    $query->where('category', $slug);
+                }
+
+                $this->applyBrandFilter($query, $request);
+                $this->applyFacetFilters($query, $request);
+
+                return [
+                    'categoryName' => $category?->name ?: ucfirst(str_replace('-', ' ', $slug)),
+                    'products' => $query->latest()->get(),
+                ];
+            },
+            fn ($v) => is_array($v) && isset($v['categoryName']) && is_string($v['categoryName'])
+                && ($v['products'] ?? null) instanceof Collection
+        );
+
+        $categories = $this->activeCategories();
+        $brands = $this->activeBrands();
+        $selectedCategories = $request->query('category', [$slug]);
+        $selectedBrands = (array) $request->query('brand', []);
+
+        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
+    }
+
+    public function product(string $slug): View
+    {
+        $product = $this->cacheRemember(
+            "catalog.product.{$slug}",
+            fn () => Product::where('slug', $slug)->firstOrFail(),
+            fn ($v) => $v instanceof Product
+        );
+
+        return view('shop.product', compact('product'));
+    }
+
+    public function search(Request $request): View
+    {
+        $query = trim((string) $request->query('q'));
+        $categoryName = $query ? 'Search: ' . $query : 'Search';
+        $filterKey = $this->filterCacheKey($request);
+
+        $products = $this->cacheRemember(
+            'catalog.search.' . md5($query) . '.' . $filterKey,
+            function () use ($query, $request) {
+                $builder = Product::query()
+                    ->where('is_active', true)
+                    ->when($query, function ($builder) use ($query) {
+                        $builder->where(function ($inner) use ($query) {
+                            $inner->where('name', 'like', "%{$query}%")
+                                ->orWhere('sku', 'like', "%{$query}%")
+                                ->orWhere('description', 'like', "%{$query}%");
+                        });
+                    });
+
+                $this->applyCategoryFilter($builder, $request);
+                $this->applyBrandFilter($builder, $request);
+                $this->applyFacetFilters($builder, $request);
+
+                return $builder->latest()->get();
+            },
+            fn ($v) => $v instanceof Collection
+        );
+
+        $categories = $this->activeCategories();
+        $brands = $this->activeBrands();
+        $selectedCategories = $request->query('category', []);
+        $selectedBrands = (array) $request->query('brand', []);
+
+        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
+    }
+
+    public function brands(): View
+    {
+        $brands = $this->cacheRemember(
+            'catalog.brands.list',
+            fn () => Brand::query()
+                ->active()
+                ->ordered()
+                ->withCount(['products' => fn ($query) => $query->where('is_active', true)])
+                ->get(),
+            fn ($v) => $v instanceof Collection
+        );
+
+        return view('shop.brands', compact('brands'));
+    }
+
+    public function brand(string $slug, Request $request): View
+    {
+        $filterKey = $this->filterCacheKey($request);
+
+        ['brandName' => $brandName, 'products' => $products] = $this->cacheRemember(
+            "catalog.brand.{$slug}.{$filterKey}",
+            function () use ($slug, $request) {
+                $brand = Brand::query()->active()->where('slug', $slug)->first();
+
+                if (! $brand) {
+                    return ['brandName' => null, 'products' => new Collection()];
+                }
+
+                $builder = Product::query()->where('is_active', true);
+
+                if ($request->query('brand') !== null) {
+                    // Sidebar brand checkboxes were submitted; they fully control which brands show.
+                    $this->applyBrandFilter($builder, $request);
+                } else {
+                    $builder->where('brand_id', $brand->id);
+                }
+
+                $this->applyCategoryFilter($builder, $request);
+                $this->applyFacetFilters($builder, $request);
+
+                return ['brandName' => $brand->name, 'products' => $builder->latest()->get()];
+            },
+            fn ($v) => is_array($v) && array_key_exists('brandName', $v)
+                && ($v['brandName'] === null || is_string($v['brandName']))
+                && ($v['products'] ?? null) instanceof Collection
+        );
+
+        abort_if($brandName === null, 404);
+
+        $categoryName = $brandName . ' Products';
+        $categories = $this->activeCategories();
+        $brands = $this->activeBrands();
+        $selectedCategories = $request->query('category', []);
+        $selectedBrands = (array) $request->query('brand', [$slug]);
+
+        return view('shop.category', compact('categoryName', 'products', 'categories', 'brands', 'selectedCategories', 'selectedBrands'));
+    }
+
+    private function applyCategoryFilter(Builder $query, Request $request): void
+    {
+        $categorySlugs = (array) $request->query('category', []);
+
+        if ($categorySlugs) {
+            $query->whereHas('categoryRelation', fn ($q) => $q->whereIn('slug', $categorySlugs));
+        }
+    }
+
+    private function applyBrandFilter(Builder $query, Request $request): void
+    {
+        $brandSlugs = (array) $request->query('brand', []);
+
+        if ($brandSlugs) {
+            $query->whereHas('brand', fn ($q) => $q->whereIn('slug', $brandSlugs));
+        }
+    }
+
+    private function applyFacetFilters(Builder $query, Request $request): void
+    {
+        $processors = (array) $request->query('processor', []);
+        $ramSizes = (array) $request->query('ram', []);
+        $storageSizes = (array) $request->query('storage', []);
+        $priceRanges = (array) $request->query('price', []);
+
+        if ($processors) {
+            $query->where(function ($outer) use ($processors) {
+                foreach ($processors as $label) {
+                    foreach (self::PROCESSOR_KEYWORDS[$label] ?? [] as $keyword) {
+                        $outer->orWhere('name', 'like', "%{$keyword}%")
+                            ->orWhere('description', 'like', "%{$keyword}%");
+                    }
+                }
+            });
+        }
+
+        if ($ramSizes) {
+            $query->where(function ($outer) use ($ramSizes) {
+                foreach ($ramSizes as $size) {
+                    $outer->orWhere('name', 'like', "%{$size}%")
+                        ->orWhere('description', 'like', "%{$size}%");
+                }
+            });
+        }
+
+        if ($storageSizes) {
+            $query->where(function ($outer) use ($storageSizes) {
+                foreach ($storageSizes as $size) {
+                    $outer->orWhere('name', 'like', "%{$size}%")
+                        ->orWhere('description', 'like', "%{$size}%");
+                }
+            });
+        }
+
+        if ($priceRanges) {
+            $query->where(function ($outer) use ($priceRanges) {
+                foreach ($priceRanges as $range) {
+                    [$min, $max] = self::PRICE_RANGES[$range] ?? [null, null];
+                    $outer->orWhere(function ($bounded) use ($min, $max) {
+                        if ($min !== null) {
+                            $bounded->where('price', '>=', $min);
+                        }
+                        if ($max !== null) {
+                            $bounded->where('price', '<=', $max);
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    /**
+     * Distinguishes cached results across different filter combinations so
+     * one visitor's applied filters can't be served back to another visitor
+     * requesting the same category/search/brand with different filters.
+     */
+    private function filterCacheKey(Request $request): string
+    {
+        $relevant = collect(['processor', 'ram', 'storage', 'price', 'category', 'brand'])
+            ->mapWithKeys(fn ($key) => [
+                $key => collect((array) $request->query($key, []))->sort()->values()->all(),
+            ])
+            ->all();
+
+        return md5(json_encode($relevant));
+    }
+
+    private function activeCategories(): Collection
+    {
+        return $this->cacheRemember(
+            'catalog.categories.active',
+            fn () => Category::where('is_active', true)
+                ->orderBy('sort_order')
+                ->get(['id', 'name', 'slug']),
+            fn ($v) => $v instanceof Collection
+        );
+    }
+
+    private function activeBrands(): Collection
+    {
+        return $this->cacheRemember(
+            'catalog.brands.active',
+            fn () => Brand::query()->active()->ordered()->get(['id', 'name', 'slug']),
+            fn ($v) => $v instanceof Collection
+        );
+    }
+}
+```
+
+### 3.2 `app/Models/Product.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+
+class Product extends Model
+{
+    use HasFactory;
+
+    protected static function booted(): void
+    {
+        // Storefront catalog/home pages cache reads under dynamic per-filter
+        // keys (see CatalogController::cacheRemember), so there's no single
+        // key to target here — flush the whole cache store instead so admin
+        // edits show up immediately rather than waiting out the TTL.
+        static::saved(fn () => Cache::flush());
+        static::deleted(fn () => Cache::flush());
+    }
+
+    protected $fillable = [
+        'category_id',
+        'brand_id',
+        'supplier_id',
+        'name',
+        'slug',
+        'sku',
+        'description',
+        'price',
+        'compare_at_price',
+        'cost_price',
+        'stock_quantity',
+        'is_active',
+        'is_featured',
+        'image',
+        'images',
+        'specifications',
+        'category',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'images' => 'array',
+            'specifications' => 'array',
+            'is_active' => 'boolean',
+            'is_featured' => 'boolean',
+            'price' => 'decimal:2',
+            'compare_at_price' => 'decimal:2',
+            'cost_price' => 'decimal:2',
+            'stock_quantity' => 'integer',
+        ];
+    }
+
+    public function categoryRelation(): BelongsTo
+    {
+        return $this->belongsTo(Category::class, 'category_id');
+    }
+
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+    public function cartItems(): HasMany
+    {
+        return $this->hasMany(CartItem::class);
+    }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function getDisplayCategoryAttribute(): string
+    {
+        return $this->categoryRelation?->name ?: ucfirst((string) $this->category);
+    }
+
+    public function getImageUrlAttribute(): string
+    {
+        if (! $this->image) {
+            return asset('images/product-placeholder.svg');
+        }
+
+        if (Str::startsWith($this->image, ['http://', 'https://', '/'])) {
+            return $this->image;
+        }
+
+        if (Str::startsWith($this->image, 'images/')) {
+            return asset($this->image);
+        }
+
+        // asset() (not Storage::disk('public')->url()) so this resolves against
+        // the actual request host, matching how the rest of the app derives URLs
+        // instead of depending on APP_URL (see commit a6d3a8b).
+        return asset('storage/' . $this->image);
+    }
+}
+```
+
+### 3.3 `app/Models/Category.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+
+class Category extends Model
+{
+    use HasFactory;
+
+    protected static function booted(): void
+    {
+        // See Product::booted() — same reasoning: no single cache key to
+        // target for the storefront's dynamic catalog cache keys.
+        static::saved(fn () => Cache::flush());
+        static::deleted(fn () => Cache::flush());
+    }
+
+    protected $fillable = [
+        'parent_id',
+        'name',
+        'slug',
+        'description',
+        'image',
+        'is_active',
+        'sort_order',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Category::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(Category::class, 'parent_id');
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    public function getImageUrlAttribute(): string
+    {
+        if (! $this->image) {
+            return asset('images/product-placeholder.svg');
+        }
+
+        if (Str::startsWith($this->image, ['http://', 'https://', '/'])) {
+            return $this->image;
+        }
+
+        if (Str::startsWith($this->image, 'images/')) {
+            return asset($this->image);
+        }
+
+        // asset() (not Storage::disk('public')->url()) so this resolves against
+        // the actual request host, matching how the rest of the app derives URLs
+        // instead of depending on APP_URL (see commit a6d3a8b).
+        return asset('storage/' . $this->image);
+    }
+}
+```
+
+### 3.4 `app/Models/Brand.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+
+class Brand extends Model
+{
+    use HasFactory;
+
+    protected static function booted(): void
+    {
+        // See Product::booted() — same reasoning: no single cache key to
+        // target for the storefront's dynamic catalog cache keys.
+        static::saved(fn () => Cache::flush());
+        static::deleted(fn () => Cache::flush());
+    }
+
+    protected $fillable = [
+        'name',
+        'slug',
+        'logo',
+        'is_active',
+        'sort_order',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
+
+    public function scopeActive(Builder $query): void
+    {
+        $query->where('is_active', true);
+    }
+
+    public function scopeOrdered(Builder $query): void
+    {
+        $query->orderBy('sort_order')->orderBy('name');
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    public function getInitialsAttribute(): string
+    {
+        return Str::of($this->name)->substr(0, 2)->upper()->toString();
+    }
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (! $this->logo) {
+            return null;
+        }
+
+        if (Str::startsWith($this->logo, ['http://', 'https://', '/'])) {
+            return $this->logo;
+        }
+
+        if (Str::startsWith($this->logo, 'images/')) {
+            return asset($this->logo);
+        }
+
+        // asset() rather than Storage::url() — see Category::getImageUrlAttribute().
+        return asset('storage/' . $this->logo);
+    }
+}
+```
+
+### 3.5 `resources/views/shop/product.blade.php`
+
+```blade
+@extends('shop.layout')
+
+@section('title', $product->name.' - CEC Electronic')
+
+@section('content')
+    @php
+        $image = $product->image_url;
+        $oldPrice = $product->compare_at_price && $product->compare_at_price > $product->price ? $product->compare_at_price : null;
+        $sku = $product->sku ?: strtoupper(substr(preg_replace('/[^a-z0-9]/i', '', $product->slug), 0, 3)) . '-' . str_pad((string) $product->id, 4, '0', STR_PAD_LEFT);
+        $specs = $product->specifications ?: [
+            'Warranty' => 'Official store warranty',
+            'Delivery' => 'Same-day Phnom Penh option',
+            'Support' => 'CEC Electronic service desk',
+        ];
+    @endphp
+
+    <section class="detail">
+        <div class="panel detail-media">
+            <img src="{{ $image }}" alt="{{ $product->name }}">
+        </div>
+
+        <aside class="panel detail-info">
+            <div class="sku">{{ $sku }}</div>
+            <h1>{{ $product->name }}</h1>
+            <div class="stock">{{ $product->stock_quantity > 0 ? 'In stock: '.$product->stock_quantity : 'Pre-order available' }}</div>
+
+            <div style="margin:18px 0">
+                <span class="price">${{ number_format($product->price, 2) }}</span>
+                @if($oldPrice)
+                    <span class="old-price">${{ number_format($oldPrice, 2) }}</span>
+                @endif
+            </div>
+
+            <p style="color:var(--muted);line-height:1.7">{{ $product->description ?: 'High-quality electronics product with official warranty and dependable after-sales support.' }}</p>
+
+            <div class="spec-table">
+                @foreach($specs as $label => $value)
+                    <div class="spec-row">
+                        <span>{{ $label }}</span>
+                        <strong>{{ is_array($value) ? implode(', ', $value) : $value }}</strong>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="panel" style="padding:14px;margin:18px 0;background:#f8fbff">
+                <strong>CEC store services</strong>
+                <div class="checks" style="margin-top:10px">
+                    <span>Same-day delivery in selected Phnom Penh areas</span>
+                    <span>Official warranty support</span>
+                    <span>Repair tracking and warranty check</span>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <form action="{{ route('cart.store', $product) }}" method="post" data-cart-add>
+                    @csrf
+                    <button class="btn" style="width:100%" type="submit">Add to cart</button>
+                </form>
+                <a class="btn secondary" href="{{ route('shop.cart') }}">View cart</a>
+            </div>
+        </aside>
+    </section>
+@endsection
+```
+
+### 3.6 `resources/views/shop/category.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -3175,7 +1899,7 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.23 `resources/views/shop/brands.blade.php`
+### 3.7 `resources/views/shop/brands.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -3232,75 +1956,341 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.24 `resources/views/shop/product.blade.php`
+### 3.8 `resources/views/shop/partials/product-card.blade.php`
 
 ```blade
-@extends('shop.layout')
+@php
+    $image = $p->image_url;
+    $oldPrice = $p->compare_at_price && $p->compare_at_price > $p->price ? $p->compare_at_price : null;
+    $sku = $p->sku ?: strtoupper(substr(preg_replace('/[^a-z0-9]/i', '', $p->slug), 0, 3)) . '-' . str_pad((string) $p->id, 4, '0', STR_PAD_LEFT);
+    $stockText = $p->stock_quantity > 0 ? 'In stock: '.$p->stock_quantity : 'Pre-order';
+@endphp
 
-@section('title', $product->name.' - CEC Electronic')
-
-@section('content')
-    @php
-        $image = $product->image_url;
-        $oldPrice = $product->compare_at_price && $product->compare_at_price > $product->price ? $product->compare_at_price : null;
-        $sku = $product->sku ?: strtoupper(substr(preg_replace('/[^a-z0-9]/i', '', $product->slug), 0, 3)) . '-' . str_pad((string) $product->id, 4, '0', STR_PAD_LEFT);
-        $specs = $product->specifications ?: [
-            'Warranty' => 'Official store warranty',
-            'Delivery' => 'Same-day Phnom Penh option',
-            'Support' => 'CEC Electronic service desk',
-        ];
-    @endphp
-
-    <section class="detail">
-        <div class="panel detail-media">
-            <img src="{{ $image }}" alt="{{ $product->name }}">
-        </div>
-
-        <aside class="panel detail-info">
+<article class="product-card">
+    <a class="product-media" href="{{ route('shop.product', $p->slug) }}">
+        @if($oldPrice)
+            <span class="badge">Save ${{ number_format($oldPrice - $p->price, 2) }}</span>
+        @endif
+        <img src="{{ $image }}" alt="{{ $p->name }}">
+    </a>
+    <div class="product-body">
+        <div class="card-meta">
             <div class="sku">{{ $sku }}</div>
-            <h1>{{ $product->name }}</h1>
-            <div class="stock">{{ $product->stock_quantity > 0 ? 'In stock: '.$product->stock_quantity : 'Pre-order available' }}</div>
-
-            <div style="margin:18px 0">
-                <span class="price">${{ number_format($product->price, 2) }}</span>
-                @if($oldPrice)
-                    <span class="old-price">${{ number_format($oldPrice, 2) }}</span>
-                @endif
-            </div>
-
-            <p style="color:var(--muted);line-height:1.7">{{ $product->description ?: 'High-quality electronics product with official warranty and dependable after-sales support.' }}</p>
-
-            <div class="spec-table">
-                @foreach($specs as $label => $value)
-                    <div class="spec-row">
-                        <span>{{ $label }}</span>
-                        <strong>{{ is_array($value) ? implode(', ', $value) : $value }}</strong>
-                    </div>
-                @endforeach
-            </div>
-
-            <div class="panel" style="padding:14px;margin:18px 0;background:#f8fbff">
-                <strong>CEC store services</strong>
-                <div class="checks" style="margin-top:10px">
-                    <span>Same-day delivery in selected Phnom Penh areas</span>
-                    <span>Official warranty support</span>
-                    <span>Repair tracking and warranty check</span>
-                </div>
-            </div>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <form action="{{ route('cart.store', $product) }}" method="post" data-cart-add>
-                    @csrf
-                    <button class="btn" style="width:100%" type="submit">Add to cart</button>
-                </form>
-                <a class="btn secondary" href="{{ route('shop.cart') }}">View cart</a>
-            </div>
-        </aside>
-    </section>
-@endsection
+            <div class="stock">{{ $stockText }}</div>
+        </div>
+        <a class="product-title" href="{{ route('shop.product', $p->slug) }}">{{ $p->name }}</a>
+        <p class="spec">{{ $p->description ?: 'Fast processor, bright display, reliable storage, and official warranty for work, study, and entertainment.' }}</p>
+        <div>
+            <span class="price">${{ number_format($p->price, 2) }}</span>
+            @if($oldPrice)
+                <span class="old-price">${{ number_format($oldPrice, 2) }}</span>
+            @endif
+        </div>
+        <form class="card-actions" action="{{ route('cart.store', $p) }}" method="post" data-cart-add>
+            @csrf
+            <button class="btn" type="submit">Add to cart</button>
+            <a class="icon-btn" href="{{ route('shop.product', $p->slug) }}" aria-label="View {{ $p->name }}" style="display:grid;place-items:center">i</a>
+        </form>
+    </div>
+</article>
 ```
 
-### 5.25 `resources/views/shop/cart.blade.php`
+---
+
+## 4. Cart
+
+- Guests: cart items are stored by `session_id`. Logged-in users: cart items are stored by `user_id`.
+- Adding the same product again increases the quantity (1–99). Setting the quantity to 0 removes the item.
+- Changing another user's cart item returns a 403 error. On login, the guest cart is merged into the user's cart.
+
+**Routes** (`routes/web.php`)
+
+```php
+Route::get('/cart', [CartController::class, 'index'])->name('shop.cart');
+Route::post('/cart/{product}', [CartController::class, 'store'])->name('cart.store');
+Route::patch('/cart/items/{cartItem}', [CartController::class, 'update'])->name('cart.update');
+Route::delete('/cart/items/{cartItem}', [CartController::class, 'destroy'])->name('cart.destroy');
+```
+
+### 4.1 `app/Http/Controllers/Storefront/CartController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers\Storefront;
+
+use App\Http\Controllers\Controller;
+use App\Models\CartItem;
+use App\Models\Product;
+use App\Services\CartService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+
+class CartController extends Controller
+{
+    public function __construct(private CartService $cartService)
+    {
+    }
+
+    public function index(Request $request): View
+    {
+        $items = $this->cartService->items($request);
+        $subtotal = $this->cartService->subtotal($request);
+
+        return view('shop.cart', compact('items', 'subtotal'));
+    }
+
+    public function store(Request $request, Product $product): RedirectResponse|JsonResponse
+    {
+        $request->merge([
+            'quantity' => $this->normalizeQuantity($request->input('quantity', 1), 1),
+        ]);
+
+        $data = $request->validate([
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:99'],
+        ]);
+
+        $this->cartService->add($request, $product, $data['quantity'] ?? 1);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => 'Product added to cart.',
+                'product' => $product->name,
+                'count' => $this->cartService->count($request),
+            ]);
+        }
+
+        return back()->with('status', 'Product added to cart.');
+    }
+
+    public function update(Request $request, CartItem $cartItem): RedirectResponse|JsonResponse
+    {
+        $request->merge([
+            'quantity' => $this->normalizeQuantity($request->input('quantity', 1), 0),
+        ]);
+
+        $data = $request->validate([
+            'quantity' => ['required', 'integer', 'min:0', 'max:99'],
+        ]);
+
+        $this->cartService->updateQuantity($request, $cartItem, $data['quantity']);
+
+        if ($request->wantsJson()) {
+            $removed = $data['quantity'] <= 0;
+
+            return response()->json([
+                'removed' => $removed,
+                'item_id' => $cartItem->id,
+                'quantity' => $removed ? 0 : $cartItem->quantity,
+                'line_total' => $removed ? null : number_format($cartItem->line_total, 2),
+                'subtotal' => number_format($this->cartService->subtotal($request), 2),
+                'count' => $this->cartService->count($request),
+            ]);
+        }
+
+        return back()->with('status', 'Cart updated.');
+    }
+
+    public function destroy(Request $request, CartItem $cartItem): RedirectResponse|JsonResponse
+    {
+        $itemId = $cartItem->id;
+
+        $this->cartService->remove($request, $cartItem);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'removed' => true,
+                'item_id' => $itemId,
+                'subtotal' => number_format($this->cartService->subtotal($request), 2),
+                'count' => $this->cartService->count($request),
+            ]);
+        }
+
+        return back()->with('status', 'Item removed.');
+    }
+
+    private function normalizeQuantity(mixed $value, int $minimum): int
+    {
+        if (! is_numeric($value)) {
+            return $minimum;
+        }
+
+        return max($minimum, (int) floor((float) $value));
+    }
+}
+```
+
+### 4.2 `app/Services/CartService.php`
+
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\CartItem;
+use App\Models\Product;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\Request;
+
+class CartService
+{
+    /**
+     * Reassign a guest session's cart items to a newly authenticated user,
+     * combining quantities where the user already has the same product.
+     */
+    public function mergeGuestCartIntoUser(string $sessionId, User $user): void
+    {
+        CartItem::query()
+            ->where('session_id', $sessionId)
+            ->get()
+            ->each(function (CartItem $guestItem) use ($user) {
+                $userItem = CartItem::query()
+                    ->where('user_id', $user->id)
+                    ->where('product_id', $guestItem->product_id)
+                    ->first();
+
+                if ($userItem) {
+                    $userItem->increment('quantity', $guestItem->quantity);
+                    $guestItem->delete();
+                } else {
+                    $guestItem->update(['user_id' => $user->id, 'session_id' => null]);
+                }
+            });
+    }
+
+    public function items(Request $request): Collection
+    {
+        return CartItem::query()
+            ->with('product')
+            ->where($this->ownerColumn($request), $this->ownerValue($request))
+            ->latest()
+            ->get();
+    }
+
+    public function add(Request $request, Product $product, int $quantity = 1): CartItem
+    {
+        $ownerColumn = $this->ownerColumn($request);
+        $ownerValue = $this->ownerValue($request);
+
+        $cartItem = CartItem::firstOrNew([
+            $ownerColumn => $ownerValue,
+            'product_id' => $product->id,
+        ]);
+
+        $cartItem->unit_price = $product->price;
+        $cartItem->quantity = (int) $cartItem->quantity + max(1, $quantity);
+        $cartItem->save();
+
+        return $cartItem;
+    }
+
+    public function updateQuantity(Request $request, CartItem $cartItem, int $quantity): void
+    {
+        $this->guardOwner($request, $cartItem);
+
+        if ($quantity <= 0) {
+            $cartItem->delete();
+            return;
+        }
+
+        $cartItem->update(['quantity' => $quantity]);
+    }
+
+    public function remove(Request $request, CartItem $cartItem): void
+    {
+        $this->guardOwner($request, $cartItem);
+        $cartItem->delete();
+    }
+
+    public function subtotal(Request $request): float
+    {
+        return $this->items($request)->sum(fn (CartItem $item) => $item->line_total);
+    }
+
+    public function count(Request $request): int
+    {
+        return (int) $this->items($request)->sum('quantity');
+    }
+
+    public function clear(Request $request): void
+    {
+        CartItem::query()
+            ->where($this->ownerColumn($request), $this->ownerValue($request))
+            ->delete();
+    }
+
+    private function ownerColumn(Request $request): string
+    {
+        return $request->user() ? 'user_id' : 'session_id';
+    }
+
+    private function ownerValue(Request $request): int|string
+    {
+        return $request->user()?->id ?: $request->session()->getId();
+    }
+
+    private function guardOwner(Request $request, CartItem $cartItem): void
+    {
+        abort_unless(
+            $cartItem->{$this->ownerColumn($request)} === $this->ownerValue($request),
+            403
+        );
+    }
+}
+```
+
+### 4.3 `app/Models/CartItem.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class CartItem extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'user_id',
+        'session_id',
+        'product_id',
+        'quantity',
+        'unit_price',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'quantity' => 'integer',
+            'unit_price' => 'decimal:2',
+        ];
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function getLineTotalAttribute(): float
+    {
+        return $this->quantity * (float) $this->unit_price;
+    }
+}
+```
+
+### 4.4 `resources/views/shop/cart.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -3377,46 +2367,203 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.26 `resources/views/shop/partials/product-card.blade.php`
+---
 
-```blade
-@php
-    $image = $p->image_url;
-    $oldPrice = $p->compare_at_price && $p->compare_at_price > $p->price ? $p->compare_at_price : null;
-    $sku = $p->sku ?: strtoupper(substr(preg_replace('/[^a-z0-9]/i', '', $p->slug), 0, 3)) . '-' . str_pad((string) $p->id, 4, '0', STR_PAD_LEFT);
-    $stockText = $p->stock_quantity > 0 ? 'In stock: '.$p->stock_quantity : 'Pre-order';
-@endphp
+## 5. Login & Register
 
-<article class="product-card">
-    <a class="product-media" href="{{ route('shop.product', $p->slug) }}">
-        @if($oldPrice)
-            <span class="badge">Save ${{ number_format($oldPrice - $p->price, 2) }}</span>
-        @endif
-        <img src="{{ $image }}" alt="{{ $p->name }}">
-    </a>
-    <div class="product-body">
-        <div class="card-meta">
-            <div class="sku">{{ $sku }}</div>
-            <div class="stock">{{ $stockText }}</div>
-        </div>
-        <a class="product-title" href="{{ route('shop.product', $p->slug) }}">{{ $p->name }}</a>
-        <p class="spec">{{ $p->description ?: 'Fast processor, bright display, reliable storage, and official warranty for work, study, and entertainment.' }}</p>
-        <div>
-            <span class="price">${{ number_format($p->price, 2) }}</span>
-            @if($oldPrice)
-                <span class="old-price">${{ number_format($oldPrice, 2) }}</span>
-            @endif
-        </div>
-        <form class="card-actions" action="{{ route('cart.store', $p) }}" method="post" data-cart-add>
-            @csrf
-            <button class="btn" type="submit">Add to cart</button>
-            <a class="icon-btn" href="{{ route('shop.product', $p->slug) }}" aria-label="View {{ $p->name }}" style="display:grid;place-items:center">i</a>
-        </form>
-    </div>
-</article>
+- **Login:** email + password. On success, the guest cart is merged and the user goes to `/account`.
+- **Register:** name, unique email, password (at least 8 characters). Earlier guest orders with the same email are linked to the new account.
+- **Logout:** clears the session and returns to the home page.
+
+**Routes** (`routes/web.php`)
+
+```php
+Route::get('/login', [CustomerAuthController::class, 'login'])->name('customer.login');
+Route::post('/login', [CustomerAuthController::class, 'authenticate'])
+    ->name('customer.login.store')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
+Route::get('/register', [CustomerAuthController::class, 'register'])->name('customer.register');
+Route::post('/register', [CustomerAuthController::class, 'store'])
+    ->name('customer.register.store')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
+Route::post('/logout', [CustomerAuthController::class, 'logout'])
+    ->name('customer.logout')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
 ```
 
-### 5.27 `resources/views/account/auth/login.blade.php`
+### 5.1 `app/Http/Controllers/Customer/AuthController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers\Customer;
+
+use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Models\User;
+use App\Services\CartService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rules\Password;
+use Illuminate\View\View;
+
+class AuthController extends Controller
+{
+    public function __construct(private CartService $cartService)
+    {
+    }
+
+    public function login(): View
+    {
+        return view('account.auth.login');
+    }
+
+    public function register(): View
+    {
+        return view('account.auth.register');
+    }
+
+    public function authenticate(Request $request): RedirectResponse|JsonResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $sessionId = $request->session()->getId();
+
+        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Email or password is incorrect.',
+                    'errors' => ['email' => ['Email or password is incorrect.']],
+                ], 422);
+            }
+
+            return back()
+                ->withErrors(['email' => 'Email or password is incorrect.'])
+                ->onlyInput('email');
+        }
+
+        $request->session()->regenerate();
+        $this->cartService->mergeGuestCartIntoUser($sessionId, $request->user());
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Logged in successfully.',
+                'redirect' => route('account.dashboard'),
+            ]);
+        }
+
+        return redirect()->intended(route('account.dashboard'));
+    }
+
+    public function store(Request $request): RedirectResponse|JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        $sessionId = $request->session()->getId();
+
+        $user = User::create($data);
+
+        Order::query()
+            ->whereNull('user_id')
+            ->where('customer_email', $user->email)
+            ->update(['user_id' => $user->id]);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+        $this->cartService->mergeGuestCartIntoUser($sessionId, $user);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Account created.',
+                'redirect' => route('account.dashboard'),
+            ]);
+        }
+
+        return redirect()->intended(route('account.dashboard'))->with('status', 'Account created.');
+    }
+
+    public function logout(Request $request): RedirectResponse|JsonResponse
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Logged out.',
+                'redirect' => route('shop.home'),
+            ]);
+        }
+
+        return redirect()->route('shop.home')->with('status', 'Logged out.');
+    }
+}
+```
+
+### 5.2 `app/Models/User.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+
+#[Fillable(['name', 'email', 'password', 'is_admin'])]
+#[Hidden(['password', 'remember_token'])]
+class User extends Authenticatable
+{
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, Notifiable;
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'is_admin' => 'boolean',
+        ];
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(CustomerAddress::class);
+    }
+
+    public function cartItems(): HasMany
+    {
+        return $this->hasMany(CartItem::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+}
+```
+
+### 5.3 `resources/views/account/auth/login.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -3468,7 +2615,7 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.28 `resources/views/account/auth/register.blade.php`
+### 5.4 `resources/views/account/auth/register.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -3518,7 +2665,743 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.29 `resources/views/checkout/create.blade.php`
+---
+
+## 6. Checkout & Payment
+
+```
+/checkout (login required) → POST /checkout → create Order (order number EH-YYYYMMDD-####) → clear the cart
+   → generate a Bakong KHQR (valid 3 minutes) → /checkout/success shows the QR
+   → the page checks GET /checkout/payment-status every 15s (Bakong is checked at most once a minute)
+   → paid: payment_status = paid   |   expired: POST /checkout/regenerate-qr
+```
+
+**Routes** (`routes/web.php`)
+
+```php
+Route::get('/checkout', [CheckoutController::class, 'create'])->name('checkout.create');
+Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+Route::get('/checkout/success/{order}', [CheckoutController::class, 'success'])->name('checkout.success');
+Route::post('/checkout/regenerate-qr/{order}', [CheckoutController::class, 'regenerateQr'])->name('checkout.regenerate-qr');
+Route::get('/checkout/payment-status/{order}', [CheckoutController::class, 'paymentStatus'])->name('checkout.payment-status');
+```
+
+### 6.1 `app/Http/Controllers/Storefront/CheckoutController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers\Storefront;
+
+use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Services\BakongService;
+use App\Services\CartService;
+use App\Services\CheckoutService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+
+class CheckoutController extends Controller
+{
+    public function __construct(
+        private CartService $cartService,
+        private CheckoutService $checkoutService
+    ) {
+    }
+
+    public function create(Request $request): View|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()
+                ->guest(route('customer.login'))
+                ->with('status', 'Please login or register before checkout.');
+        }
+
+        $items = $this->cartService->items($request);
+        $subtotal = $this->cartService->subtotal($request);
+
+        return view('checkout.create', compact('items', 'subtotal'));
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()
+                ->guest(route('customer.login'))
+                ->with('status', 'Please login or register before checkout.');
+        }
+
+        // A double-submitted "Place order" (double-click, back-button resubmit,
+        // slow-network retry) would otherwise reach CheckoutService with an
+        // already-cleared cart from the first successful submission and crash
+        // with a raw 422 — fail soft here instead, before doing any work.
+        if ($this->cartService->items($request)->isEmpty()) {
+            return redirect()->route('shop.cart')->with('status', 'Your cart is empty.');
+        }
+
+        $data = $request->validate([
+            'customer_name' => ['required', 'string', 'max:255'],
+            'customer_email' => ['nullable', 'email', 'max:255'],
+            'customer_phone' => ['required', 'string', 'max:50'],
+            'address_line_1' => ['required', 'string', 'max:255'],
+            'address_line_2' => ['nullable', 'string', 'max:255'],
+            'city' => ['required', 'string', 'max:100'],
+            'province' => ['nullable', 'string', 'max:100'],
+            'country' => ['nullable', 'string', 'max:100'],
+            'shipping_method' => ['nullable', 'string', 'max:100'],
+            'payment_method' => ['nullable', 'string', 'max:100'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $order = $this->checkoutService->createOrder($request, $data);
+
+        if ($order->payment_method === 'bakong') {
+            $this->issueQr($order);
+        }
+
+        return redirect()->route('checkout.success', $order)->with('status', 'Order placed.');
+    }
+
+    public function success(Request $request, Order $order): View
+    {
+        abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
+
+        $order->load('items');
+
+        // The QR closes 3 minutes after it is issued (the deadline is baked into
+        // the KHQR payload, so Bakong's app rejects it too). Never regenerate it
+        // just because the page was revisited — that would reset the clock. Only
+        // orders that have no QR deadline yet (created before the expiry existed)
+        // get a fresh one; after expiry the customer asks for a new QR explicitly.
+        if ($order->payment_method === 'bakong'
+            && $order->payment_status === 'unpaid'
+            && $order->bakong_qr_expires_at === null) {
+            $this->issueQr($order);
+        }
+
+        return view('checkout.success', compact('order'));
+    }
+
+    public function regenerateQr(Request $request, Order $order): RedirectResponse
+    {
+        abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
+
+        if ($order->payment_method !== 'bakong' || $order->payment_status !== 'unpaid' || ! $order->bakongQrExpired()) {
+            return redirect()->route('checkout.success', $order);
+        }
+
+        // A new QR has a different md5, so a payment made on the old QR in its
+        // last minutes would never be seen again. Check the old one once first
+        // (a customer-initiated action, so it may pass the automated daily cap).
+        if ($order->bakong_qr_md5
+            && app(BakongService::class)->checkTransactionByMd5($order->bakong_qr_md5, enforceBudget: false) !== null) {
+            $order->update([
+                'payment_status'       => 'paid',
+                'payment_confirmed_at' => now(),
+            ]);
+
+            return redirect()->route('checkout.success', $order)->with('status', 'Payment received.');
+        }
+
+        $this->issueQr($order);
+
+        return redirect()->route('checkout.success', $order)->with('status', 'A new QR code was generated.');
+    }
+
+    public function paymentStatus(Request $request, Order $order): JsonResponse
+    {
+        abort_unless($request->user() && $order->user_id === $request->user()->id, 403);
+
+        // Bakong's check-transaction API is rate-limited to a small number of
+        // requests per day for the whole store. The checkout page polls this
+        // route every 15s while a tab is open, so throttling outbound Bakong
+        // calls to the same 15s window did nothing — a single customer
+        // leaving a tab open for the ~10 minute polling window could burn
+        // nearly half the daily budget alone. Throttle well below the poll
+        // rate instead, so the UI can still poll for a fast response without
+        // every poll spending part of the shared daily quota.
+        $throttleKey = "bakong-check:{$order->id}";
+
+        if ($order->payment_status === 'unpaid' && $order->bakong_qr_md5) {
+            $checkNow = app(BakongService::class)->allowOnce($throttleKey, 60);
+            $finalCheck = false;
+
+            // A customer can pay in the last seconds of the 3-minute QR window, after
+            // the last throttled check and just before the page stops polling.
+            // Give every order one extra check once its QR has expired so that
+            // payment is still picked up (like regenerateQr, this is
+            // customer-driven and once per order, so it may pass the daily cap).
+            if (! $checkNow && $order->bakongQrExpired()) {
+                $finalCheck = $checkNow = app(BakongService::class)->allowOnce("bakong-final-check:{$order->id}", 86400);
+            }
+
+            if ($checkNow) {
+                $tx = app(BakongService::class)->checkTransactionByMd5(
+                    $order->bakong_qr_md5,
+                    enforceBudget: ! $finalCheck,
+                );
+
+                if ($tx !== null) {
+                    $order->update([
+                        'payment_status'      => 'paid',
+                        'payment_confirmed_at' => now(),
+                    ]);
+                    $order->refresh();
+                }
+            }
+        }
+
+        return response()->json([
+            'order_number' => $order->order_number,
+            'payment_status' => $order->payment_status,
+            'is_paid' => $order->payment_status === 'paid',
+            'paid_at' => $order->payment_confirmed_at?->toIso8601String(),
+            'qr_expired' => $order->payment_status !== 'paid' && $order->bakongQrExpired(),
+        ]);
+    }
+
+    /**
+     * Generate a fixed-amount QR (valid for the configured window) and store the
+     * string, md5 (for payment polling) and deadline on the order.
+     */
+    private function issueQr(Order $order): void
+    {
+        $qrData = app(BakongService::class)->generateQrForOrder($order);
+
+        if ($qrData) {
+            $order->update([
+                'bakong_qr_string'     => $qrData['qr'],
+                'bakong_qr_md5'        => $qrData['md5'],
+                'bakong_qr_expires_at' => $qrData['expires_at'],
+            ]);
+        }
+    }
+}
+```
+
+### 6.2 `app/Services/CheckoutService.php`
+
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\CartItem;
+use App\Models\Order;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class CheckoutService
+{
+    public function __construct(private CartService $cartService)
+    {
+    }
+
+    public function createOrder(Request $request, array $data): Order
+    {
+        $items = $this->cartService->items($request);
+        abort_if($items->isEmpty(), 422, 'Cart is empty.');
+
+        return DB::transaction(function () use ($request, $data, $items) {
+            $subtotal = $items->sum(fn (CartItem $item) => $item->line_total);
+            $shippingTotal = 0;
+            $paymentMethod = $data['payment_method'] ?? 'bakong';
+
+            $order = Order::create([
+                'order_number' => $this->orderNumber(),
+                'user_id' => $request->user()?->id,
+                'customer_name' => $data['customer_name'],
+                'customer_email' => $data['customer_email'] ?? $request->user()?->email,
+                'customer_phone' => $data['customer_phone'],
+                'status' => 'pending',
+                'payment_status' => 'unpaid',
+                'payment_confirmed_at' => null,
+                'admin_payment_seen_at' => null,
+                'payment_method' => $paymentMethod,
+                'shipping_method' => $data['shipping_method'] ?? 'standard',
+                'subtotal' => $subtotal,
+                'shipping_total' => $shippingTotal,
+                'discount_total' => 0,
+                'grand_total' => $subtotal + $shippingTotal,
+                'shipping_address' => [
+                    'address_line_1' => $data['address_line_1'],
+                    'address_line_2' => $data['address_line_2'] ?? null,
+                    'city' => $data['city'],
+                    'province' => $data['province'] ?? null,
+                    'country' => $data['country'] ?? 'Cambodia',
+                ],
+                'notes' => $data['notes'] ?? null,
+                'placed_at' => now(),
+            ]);
+
+            foreach ($items as $item) {
+                $order->items()->create([
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product?->name ?: 'Deleted product',
+                    'sku' => $item->product?->sku,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'line_total' => $item->line_total,
+                ]);
+            }
+
+            $this->cartService->clear($request);
+
+            return $order;
+        });
+    }
+
+    private function orderNumber(): string
+    {
+        do {
+            $number = 'EH-' . now()->format('Ymd') . '-' . random_int(1000, 9999);
+        } while (Order::where('order_number', $number)->exists());
+
+        return $number;
+    }
+}
+```
+
+### 6.3 `app/Services/BakongService.php`
+
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\Order;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
+class BakongService
+{
+    private string $baseUrl;
+    private string $accountUsername;
+    private string $accountName;
+    private string $accessToken;
+    private string $merchantCity;
+    private int $dailyCheckLimit;
+    private int $qrExpirySeconds;
+
+    public function __construct()
+    {
+        $this->baseUrl         = rtrim((string) config('services.bakong.base_url', ''), '/');
+        $this->accountUsername = (string) config('services.bakong.account_username', '');
+        $this->accountName     = (string) config('services.bakong.account_name', 'CEC Electronic');
+        $this->accessToken     = (string) config('services.bakong.access_token', '');
+        $this->merchantCity    = (string) config('services.bakong.merchant_city', 'Phnom Penh');
+        $this->dailyCheckLimit = (int) config('services.bakong.daily_check_limit', 90);
+        $this->qrExpirySeconds = max(1, (int) config('services.bakong.qr_expiry_seconds', 180));
+    }
+
+    public function isConfigured(): bool
+    {
+        return $this->accountUsername !== '';
+    }
+
+    private function http(): PendingRequest
+    {
+        // DNS to Bakong's API intermittently fails to resolve inside this
+        // network — retry a couple of times before giving up on a single check.
+        // throw: false keeps a plain non-2xx response (e.g. "not found") as a
+        // normal response object instead of turning it into an exception —
+        // only connection-level failures (DNS, timeout) should be retried/thrown.
+        return Http::timeout(15)->retry(3, 500, throw: false)->acceptJson()->withToken($this->accessToken);
+    }
+
+    /**
+     * Generate a fixed-amount KHQR string for an order — computed locally
+     * following the NBC KHQR SDK spec, no API call needed.
+     * Returns ['qr' => string, 'md5' => string, 'expires_at' => Carbon] or null if not configured.
+     * The QR is only valid for services.bakong.qr_expiry_seconds (default 180 = 3 minutes).
+     */
+    public function generateQrForOrder(Order $order): ?array
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        $qr = KhqrGenerator::individual(
+            accountId:      $this->accountUsername,
+            merchantName:   $this->accountName,
+            merchantCity:   $this->merchantCity,
+            amount:         (float) $order->grand_total,
+            currency:       'USD',
+            billNumber:     $order->order_number,
+            expirationSeconds: $this->qrExpirySeconds,
+        );
+
+        return [
+            'qr'         => $qr['qr'],
+            'md5'        => $qr['md5'],
+            'expires_at' => Carbon::createFromTimestamp($qr['expires_at']),
+        ];
+    }
+
+    /**
+     * Verify a payment against the official Bakong Open API using the MD5
+     * hash of the KHQR string. Returns the transaction data once paid, or
+     * null while unpaid / not yet found.
+     *
+     * Bakong caps this endpoint at a small number of requests per day for
+     * the whole account. A shared daily counter guards every caller (live
+     * customer polling and the background job alike) so the app can never
+     * exceed that cap and get every pending order stuck until it resets.
+     */
+    /**
+     * $enforceBudget can be set false for a deliberate, human-initiated check
+     * (e.g. an admin clicking "verify now" on one order) — those are
+     * naturally rate-limited by a person clicking a button, unlike automated
+     * polling, so they're allowed past the shared daily cap that protects
+     * against runaway automated usage. The check still counts toward the
+     * shared counter so automated callers see accurate usage.
+     */
+    public function checkTransactionByMd5(string $md5, bool $enforceBudget = true): ?array
+    {
+        if ($this->baseUrl === '' || $this->accessToken === '') {
+            return null;
+        }
+
+        if ($enforceBudget && $this->dailyBudgetExceeded()) {
+            return null;
+        }
+
+        $this->recordDailyCheck();
+
+        try {
+            $response = $this->http()->post("{$this->baseUrl}/check_transaction_by_md5", [
+                'md5' => $md5,
+            ]);
+        } catch (ConnectionException $e) {
+            // Network/DNS hiccup reaching Bakong — treat as "not confirmed yet"
+            // rather than blowing up the request; the next poll/job run retries.
+            Log::warning('Bakong check_transaction_by_md5 connection failed', [
+                'md5' => $md5,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if (! $response->successful() || $response->json('responseCode') !== 0) {
+            return null;
+        }
+
+        return $response->json('data');
+    }
+
+    /**
+     * True the first time it is called for $key within $seconds — a throttle
+     * that protects the shared Bakong quota. It must never stop a payment being
+     * confirmed, so if the cache is unavailable (e.g. an unwritable cache
+     * folder) it falls back to a per-session throttle instead of throwing, and
+     * allows the call outright where there is no session (console/queue).
+     */
+    public function allowOnce(string $key, int $seconds): bool
+    {
+        try {
+            return Cache::add($key, true, $seconds);
+        } catch (Throwable $e) {
+            Log::warning('Bakong throttle cache unavailable, using session fallback', ['message' => $e->getMessage()]);
+        }
+
+        $request = request();
+
+        if (! $request->hasSession()) {
+            return true;
+        }
+
+        $sessionKey = 'bakong_throttle.'.md5($key);
+        $last = (int) $request->session()->get($sessionKey, 0);
+
+        if ($last > 0 && (time() - $last) < $seconds) {
+            return false;
+        }
+
+        $request->session()->put($sessionKey, time());
+
+        return true;
+    }
+
+    private function dailyBudgetExceeded(): bool
+    {
+        if ($this->dailyCheckLimit <= 0) {
+            return false;
+        }
+
+        try {
+            return (int) Cache::get($this->dailyBudgetKey(), 0) >= $this->dailyCheckLimit;
+        } catch (Throwable $e) {
+            // The counter only protects the daily quota. An unwritable cache
+            // must never stop a customer's payment from being confirmed.
+            Log::warning('Bakong daily budget counter unavailable', ['message' => $e->getMessage()]);
+
+            return false;
+        }
+    }
+
+    private function recordDailyCheck(): void
+    {
+        try {
+            $key = $this->dailyBudgetKey();
+
+            Cache::add($key, 0, now()->endOfDay()->addSecond());
+            Cache::increment($key);
+        } catch (Throwable $e) {
+            Log::warning('Bakong daily budget counter unavailable', ['message' => $e->getMessage()]);
+        }
+    }
+
+    private function dailyBudgetKey(): string
+    {
+        return 'bakong:daily-checks:' . now()->toDateString();
+    }
+}
+```
+
+### 6.4 `app/Services/KhqrGenerator.php`
+
+```php
+<?php
+
+namespace App\Services;
+
+/**
+ * Generates KHQR (EMV QR) strings locally following the NBC KHQR SDK specification.
+ * No external API call required — everything is computed on the server.
+ */
+class KhqrGenerator
+{
+    private static function field(string $tag, string $value): string
+    {
+        return $tag . str_pad(strlen($value), 2, '0', STR_PAD_LEFT) . $value;
+    }
+
+    private static function crc16(string $data): string
+    {
+        $crc = 0xFFFF;
+        for ($i = 0, $len = strlen($data); $i < $len; $i++) {
+            $crc ^= ord($data[$i]) << 8;
+            for ($j = 0; $j < 8; $j++) {
+                $crc = ($crc & 0x8000)
+                    ? (($crc << 1) ^ 0x1021) & 0xFFFF
+                    : ($crc << 1) & 0xFFFF;
+            }
+        }
+        return strtoupper(str_pad(dechex($crc), 4, '0', STR_PAD_LEFT));
+    }
+
+    /**
+     * Generate a dynamic individual KHQR string with a fixed amount.
+     *
+     * @return array{qr: string, md5: string, expires_at: int} expires_at is a unix timestamp (seconds)
+     */
+    public static function individual(
+        string $accountId,
+        string $merchantName,
+        string $merchantCity = 'Phnom Penh',
+        float  $amount = 0,
+        string $currency = 'USD',
+        string $billNumber = '',
+        int    $expirationSeconds = 86400
+    ): array {
+        $currencyCode = strtoupper($currency) === 'KHR' ? '116' : '840';
+
+        // Tag 29 — individual account info
+        $merchantAccount = self::field('29', self::field('00', $accountId));
+
+        // Tag 62 — additional data (bill number)
+        $additional = $billNumber
+            ? self::field('62', self::field('01', substr($billNumber, 0, 25)))
+            : '';
+
+        // Tag 99 — KHQR timestamps in milliseconds
+        $nowMs = (int) (microtime(true) * 1000);
+        $expMs = $nowMs + ($expirationSeconds * 1000);
+        $timestamps = self::field('99',
+            self::field('00', (string) $nowMs) .
+            self::field('01', (string) $expMs)
+        );
+
+        // Amount string — strip trailing zeros after decimal
+        $amountField = '';
+        if ($amount > 0) {
+            $formatted = number_format($amount, 2, '.', '');
+            $amountField = self::field('54', rtrim(rtrim($formatted, '0'), '.'));
+        }
+
+        $qr  = self::field('00', '01');                          // Payload Format Indicator
+        $qr .= self::field('01', '12');                          // Point of Initiation (dynamic)
+        $qr .= $merchantAccount;                                  // Merchant Account
+        $qr .= self::field('52', '5999');                        // MCC
+        $qr .= self::field('53', $currencyCode);                 // Currency
+        $qr .= $amountField;                                      // Amount
+        $qr .= self::field('58', 'KH');                          // Country Code
+        $qr .= self::field('59', mb_substr($merchantName, 0, 25)); // Merchant Name
+        $qr .= self::field('60', mb_substr($merchantCity, 0, 15)); // Merchant City
+        $qr .= $additional;                                       // Bill Number
+        $qr .= $timestamps;                                       // Timestamps
+        $qr .= '6304';                                            // CRC tag + length placeholder
+
+        $crc    = self::crc16($qr);
+        $qrFull = $qr . $crc;
+
+        return [
+            'qr'  => $qrFull,
+            'md5' => md5($qrFull),
+            'expires_at' => intdiv($expMs, 1000),
+        ];
+    }
+}
+```
+
+### 6.5 `app/Models/Order.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Order extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'order_number',
+        'user_id',
+        'customer_name',
+        'customer_email',
+        'customer_phone',
+        'status',
+        'payment_status',
+        'payment_confirmed_at',
+        'admin_payment_seen_at',
+        'payment_method',
+        'bakong_session_id',
+        'bakong_checkout_url',
+        'bakong_qr_string',
+        'bakong_qr_md5',
+        'bakong_qr_expires_at',
+        'shipping_method',
+        'delivery_zone_id',
+        'delivery_provider_id',
+        'tracking_number',
+        'shipped_at',
+        'delivered_at',
+        'subtotal',
+        'shipping_total',
+        'discount_total',
+        'grand_total',
+        'shipping_address',
+        'notes',
+        'placed_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'shipping_address' => 'array',
+            'subtotal' => 'decimal:2',
+            'shipping_total' => 'decimal:2',
+            'discount_total' => 'decimal:2',
+            'grand_total' => 'decimal:2',
+            'placed_at' => 'datetime',
+            'payment_confirmed_at' => 'datetime',
+            'bakong_qr_expires_at' => 'datetime',
+            'admin_payment_seen_at' => 'datetime',
+            'shipped_at' => 'datetime',
+            'delivered_at' => 'datetime',
+        ];
+    }
+
+    public function bakongQrExpired(): bool
+    {
+        return $this->bakong_qr_expires_at !== null && $this->bakong_qr_expires_at->isPast();
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function deliveryZone(): BelongsTo
+    {
+        return $this->belongsTo(DeliveryZone::class);
+    }
+
+    public function deliveryProvider(): BelongsTo
+    {
+        return $this->belongsTo(DeliveryProvider::class);
+    }
+
+    public function shipments(): HasMany
+    {
+        return $this->hasMany(Shipment::class);
+    }
+}
+```
+
+### 6.6 `app/Models/OrderItem.php`
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class OrderItem extends Model
+{
+    protected $fillable = [
+        'order_id',
+        'product_id',
+        'product_name',
+        'sku',
+        'quantity',
+        'unit_price',
+        'line_total',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'quantity' => 'integer',
+            'unit_price' => 'decimal:2',
+            'line_total' => 'decimal:2',
+        ];
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+}
+```
+
+### 6.7 `resources/views/checkout/create.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -3687,7 +3570,7 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.30 `resources/views/checkout/success.blade.php`
+### 6.8 `resources/views/checkout/success.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -4030,7 +3913,156 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.31 `resources/views/account/dashboard.blade.php`
+---
+
+## 7. My Account & Receipt
+
+- `/account` shows the 10 newest orders. `/account/orders` shows all orders, 10 per page. Customers can only see their own orders.
+- Receipts are PDFs (download or view in the browser) made from `receipts/order.blade.php`.
+
+**Routes** (`routes/web.php`)
+
+```php
+Route::prefix('account')->name('account.')->group(function () {
+    Route::get('/', [AccountController::class, 'dashboard'])->name('dashboard');
+    Route::get('/orders', [AccountController::class, 'orders'])->name('orders');
+    Route::get('/orders/{order}', [AccountController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}/receipt', [AccountController::class, 'receipt'])->name('orders.receipt');
+    Route::get('/orders/{order}/receipt/view', [AccountController::class, 'viewReceipt'])->name('orders.receipt.view');
+});
+```
+
+### 7.1 `app/Http/Controllers/Customer/AccountController.php`
+
+```php
+<?php
+
+namespace App\Http\Controllers\Customer;
+
+use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Services\ReceiptPdf;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\View\View;
+
+class AccountController extends Controller
+{
+    public function dashboard(Request $request): View|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()->route('customer.login');
+        }
+
+        $orders = Order::query()
+            ->when($request->user(), fn ($query) => $query->where('user_id', $request->user()->id))
+            ->latest()
+            ->take(10)
+            ->get();
+
+        return view('account.dashboard', compact('orders'));
+    }
+
+    public function orders(Request $request): View|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()->route('customer.login');
+        }
+
+        $orders = Order::query()
+            ->when($request->user(), fn ($query) => $query->where('user_id', $request->user()->id))
+            ->latest()
+            ->paginate(10);
+
+        return view('account.orders', compact('orders'));
+    }
+
+    public function show(Request $request, Order $order): View|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()->route('customer.login');
+        }
+
+        $order->load(['items.product', 'deliveryProvider', 'deliveryZone']);
+
+        if ($order->user_id !== $request->user()->id) {
+            abort(403);
+        }
+
+        return view('account.order-show', compact('order'));
+    }
+
+    public function receipt(Request $request, Order $order, ReceiptPdf $receipts): Response|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()->route('customer.login');
+        }
+
+        abort_unless($order->user_id === $request->user()->id, 403);
+
+        return $receipts->download($order);
+    }
+
+    public function viewReceipt(Request $request, Order $order, ReceiptPdf $receipts): Response|RedirectResponse
+    {
+        if (! $request->user()) {
+            return redirect()->route('customer.login');
+        }
+
+        abort_unless($order->user_id === $request->user()->id, 403);
+
+        return $receipts->stream($order);
+    }
+}
+```
+
+### 7.2 `app/Services/ReceiptPdf.php`
+
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\Order;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Response;
+
+class ReceiptPdf
+{
+    /**
+     * A receipt only exists once payment is confirmed; unpaid orders 404.
+     */
+    public function download(Order $order): Response
+    {
+        return $this->pdf($order)->download($this->filename($order));
+    }
+
+    /**
+     * Same receipt, opened in the browser instead of saved.
+     */
+    public function stream(Order $order): Response
+    {
+        return $this->pdf($order)->stream($this->filename($order));
+    }
+
+    private function pdf(Order $order)
+    {
+        abort_unless($order->payment_status === 'paid', 404);
+
+        $order->loadMissing('items', 'deliveryProvider');
+
+        return Pdf::loadView('receipts.order', compact('order'))->setPaper('a4');
+    }
+
+    private function filename(Order $order): string
+    {
+        return 'receipt-'.$order->order_number.'.pdf';
+    }
+}
+```
+
+### 7.3 `resources/views/account/dashboard.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -4078,7 +4110,7 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.32 `resources/views/account/orders.blade.php`
+### 7.4 `resources/views/account/orders.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -4121,7 +4153,7 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.33 `resources/views/account/order-show.blade.php`
+### 7.5 `resources/views/account/order-show.blade.php`
 
 ```blade
 @extends('shop.layout')
@@ -4183,7 +4215,7 @@ class User extends Authenticatable
 @endsection
 ```
 
-### 5.34 `resources/views/receipts/order.blade.php`
+### 7.6 `resources/views/receipts/order.blade.php`
 
 ```blade
 <!DOCTYPE html>
@@ -4380,133 +4412,4 @@ class User extends Authenticatable
     </div>
 </body>
 </html>
-```
-
-### 5.35 `resources/views/partials/loading-overlay.blade.php`
-
-```blade
-<style>
-    .page-loader{position:fixed;inset:0;background:rgba(255,255,255,.72);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:9999;opacity:0;visibility:hidden;transition:opacity .15s ease}
-    .page-loader.is-active{opacity:1;visibility:visible}
-    .page-loader-box{display:flex;flex-direction:column;align-items:center;gap:12px}
-    .page-loader-spinner{width:44px;height:44px;border-radius:50%;border:4px solid var(--line,#dde5f0);border-top-color:var(--brand,#0057a8);animation:page-loader-spin .7s linear infinite}
-    .page-loader-text{font-weight:800;color:var(--brand,#0057a8);font-size:13px;letter-spacing:.02em}
-    @keyframes page-loader-spin{to{transform:rotate(360deg)}}
-</style>
-
-<div id="page-loader" class="page-loader" aria-hidden="true">
-    <div class="page-loader-box">
-        <span class="page-loader-spinner"></span>
-        <span class="page-loader-text">Loading…</span>
-    </div>
-</div>
-
-<script>
-    (function () {
-        var loader = document.getElementById('page-loader');
-        if (! loader) return;
-
-        var hideTimer;
-
-        function showLoader() {
-            loader.classList.add('is-active');
-            loader.setAttribute('aria-hidden', 'false');
-            // Safety net: a page that never finishes navigating (dropped
-            // connection, blocked request) would otherwise leave the
-            // overlay stuck forever.
-            window.clearTimeout(hideTimer);
-            hideTimer = window.setTimeout(hideLoader, 8000);
-        }
-
-        function hideLoader() {
-            loader.classList.remove('is-active');
-            loader.setAttribute('aria-hidden', 'true');
-            window.clearTimeout(hideTimer);
-        }
-
-        window.PageLoader = { show: showLoader, hide: hideLoader };
-
-        document.addEventListener('click', function (event) {
-            if (event.defaultPrevented || event.button !== 0) return;
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-
-            var link = event.target.closest('a[href]');
-            if (! link || link.dataset.noLoader !== undefined) return;
-            if (link.target === '_blank' || link.hasAttribute('download')) return;
-
-            var href = link.getAttribute('href') || '';
-            if (! href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-
-            var url;
-            try {
-                url = new URL(link.href, window.location.href);
-            } catch (e) {
-                return;
-            }
-
-            if (url.origin !== window.location.origin) return;
-            // A link to the same page that only changes the hash (in-page anchor) doesn't navigate.
-            if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
-
-            showLoader();
-        });
-
-        document.addEventListener('submit', function (event) {
-            var form = event.target;
-            if (event.defaultPrevented) return;
-            if (form.dataset.noLoader !== undefined) return;
-            // AJAX forms (add-to-cart, etc.) manage their own loading state.
-            if (form.hasAttribute('data-cart-add')) return;
-
-            showLoader();
-        });
-
-        // Restores from the browser's back/forward cache arrive with the
-        // page already rendered, so any loader left over from before must
-        // be cleared instead of sitting on screen.
-        window.addEventListener('pageshow', hideLoader);
-    })();
-</script>
-```
-
-### 5.36 `resources/views/vendor/pagination/custom.blade.php`
-
-```blade
-@if ($paginator->hasPages())
-    <nav class="pager" role="navigation" aria-label="{{ __('Pagination Navigation') }}">
-        @if ($paginator->onFirstPage())
-            <span class="btn secondary pager-nav disabled" aria-disabled="true">&larr; Back</span>
-        @else
-            <a class="btn secondary pager-nav" href="{{ $paginator->previousPageUrl() }}" rel="prev">&larr; Back</a>
-        @endif
-
-        <div class="pager-pages">
-            @foreach ($elements as $element)
-                @if (is_string($element))
-                    <span class="pager-dots">{{ $element }}</span>
-                @endif
-
-                @if (is_array($element))
-                    @foreach ($element as $page => $url)
-                        @if ($page == $paginator->currentPage())
-                            <span class="pager-page active" aria-current="page">{{ $page }}</span>
-                        @else
-                            <a class="pager-page" href="{{ $url }}">{{ $page }}</a>
-                        @endif
-                    @endforeach
-                @endif
-            @endforeach
-        </div>
-
-        @if ($paginator->hasMorePages())
-            <a class="btn pager-nav" href="{{ $paginator->nextPageUrl() }}" rel="next">Next &rarr;</a>
-        @else
-            <span class="btn pager-nav disabled" aria-disabled="true">Next &rarr;</span>
-        @endif
-    </nav>
-
-    <p class="pager-summary">
-        Showing {{ $paginator->firstItem() }}&ndash;{{ $paginator->lastItem() }} of {{ $paginator->total() }}
-    </p>
-@endif
 ```
