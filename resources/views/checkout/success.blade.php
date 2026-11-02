@@ -109,7 +109,7 @@
                         <div data-qr-expired @if(! $qrExpired) hidden @endif style="text-align:center;padding:24px 12px">
                             <p style="font-weight:700;margin:0 0 6px">This QR code has expired</p>
                             <p style="color:var(--muted);margin:0 0 16px;font-size:13px">
-                                QR codes are valid for {{ round((int) config('services.bakong.qr_expiry_seconds', 180) / 60) }} minutes. Do not pay an expired code — generate a new one.
+                                @php($qrMinutes = max(1, (int) round((int) config('services.bakong.qr_expiry_seconds', 60) / 60)))QR codes are valid for {{ $qrMinutes }} {{ \Illuminate\Support\Str::plural('minute', $qrMinutes) }}. Do not pay an expired code — generate a new one.
                             </p>
                             <div style="display:flex;gap:10px">
                                 <form method="POST" action="{{ route('checkout.regenerate-qr', $order) }}" style="flex:1;margin:0">
@@ -261,11 +261,11 @@
                         }
                     }
 
-                    // Bakong's transaction-check API allows very few requests per
-                    // day for the whole store, so this polls slowly and stops
-                    // after a while rather than hammering it while a tab sits open.
-                    var POLL_INTERVAL_MS = 15000;
-                    var MAX_ATTEMPTS     = 40; // ~10 minutes
+                    // Polling this page's own server is cheap: the server decides
+                    // how often to actually ask Bakong (BAKONG_CHECK_INTERVAL_SECONDS),
+                    // so a payment is picked up within ~10s. Stops after ~10 minutes.
+                    var POLL_INTERVAL_MS = 5000;
+                    var MAX_ATTEMPTS     = 120; // ~10 minutes
 
                     function checkPayment() {
                         attempts += 1;

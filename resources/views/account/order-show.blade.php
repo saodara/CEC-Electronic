@@ -48,8 +48,10 @@
                 <h3>Delivery address</h3>
                 <p style="color:var(--muted);line-height:1.7">
                     {{ $order->shipping_address['address_line_1'] ?? '' }}<br>
-                    {{ $order->shipping_address['address_line_2'] ?? '' }}<br>
-                    {{ $order->shipping_address['city'] ?? '' }}, {{ $order->shipping_address['province'] ?? '' }}
+                    @if(! empty($order->shipping_address['address_line_2']))
+                        {{ $order->shipping_address['address_line_2'] }}<br>
+                    @endif
+                    {{ collect([$order->shipping_address['city'] ?? null, $order->shipping_address['province'] ?? null])->filter()->implode(', ') }}
                 </p>
             @endif
         </aside>

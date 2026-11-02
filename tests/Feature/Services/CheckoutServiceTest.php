@@ -46,6 +46,34 @@ class CheckoutServiceTest extends TestCase
         ], $overrides);
     }
 
+    public function test_checkout_page_no_longer_shows_shipping_method_or_bank_transfer(): void
+    {
+        $user = User::factory()->create();
+        $this->makeCartItem(['user_id' => $user->id, 'product_id' => Product::factory()->create()->id]);
+
+        $this->actingAs($user)->get(route('checkout.create'))
+            ->assertOk()
+            ->assertDontSee('Shipping method')
+            ->assertDontSee('Bank transfer')
+            ->assertDontSee('name="address_line_2"', false)
+            ->assertDontSee('name="province"', false)
+            ->assertDontSee('name="country"', false)
+            ->assertSee('value="bakong"', false)
+            ->assertSee('value="cash_on_delivery"', false);
+    }
+
+    public function test_store_rejects_bank_transfer(): void
+    {
+        $user = User::factory()->create();
+        $this->makeCartItem(['user_id' => $user->id, 'product_id' => Product::factory()->create()->id]);
+
+        $this->actingAs($user)
+            ->post(route('checkout.store'), $this->validCheckoutPayload(['payment_method' => 'bank_transfer']))
+            ->assertSessionHasErrors(['payment_method']);
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
     public function test_guest_is_redirected_to_login_on_checkout_create(): void
     {
         $this->get(route('checkout.create'))

@@ -69,8 +69,11 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['required', 'string', 'max:20', 'regex:/^\+?[0-9][0-9\s\-]{6,18}$/'],
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
+
+        $data['phone'] = preg_replace('/[\s\-]/', '', $data['phone']);
 
         $sessionId = $request->session()->getId();
 

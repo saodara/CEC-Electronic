@@ -55,13 +55,11 @@ class CheckoutController extends Controller
             'customer_email' => ['nullable', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:50'],
             'address_line_1' => ['required', 'string', 'max:255'],
-            'address_line_2' => ['nullable', 'string', 'max:255'],
             'city' => ['required', 'string', 'max:100'],
-            'province' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'shipping_method' => ['nullable', 'string', 'max:100'],
-            'payment_method' => ['nullable', 'string', 'max:100'],
+            'payment_method' => ['nullable', 'string', 'in:bakong,cash_on_delivery'],
             'notes' => ['nullable', 'string'],
+        ], [], [
+            'address_line_1' => 'address',
         ]);
 
         $order = $this->checkoutService->createOrder($request, $data);
@@ -79,7 +77,7 @@ class CheckoutController extends Controller
 
         $order->load('items');
 
-        // The QR closes 3 minutes after it is issued (the deadline is baked into
+        // The QR closes 1 minute after it is issued (the deadline is baked into
         // the KHQR payload, so Bakong's app rejects it too). Never regenerate it
         // just because the page was revisited — that would reset the clock. Only
         // orders that have no QR deadline yet (created before the expiry existed)
@@ -134,10 +132,13 @@ class CheckoutController extends Controller
         $throttleKey = "bakong-check:{$order->id}";
 
         if ($order->payment_status === 'unpaid' && $order->bakong_qr_md5) {
-            $checkNow = app(BakongService::class)->allowOnce($throttleKey, 60);
+            $checkNow = app(BakongService::class)->allowOnce(
+                $throttleKey,
+                max(5, (int) config('services.bakong.check_interval_seconds', 10)),
+            );
             $finalCheck = false;
 
-            // A customer can pay in the last seconds of the 3-minute QR window, after
+            // A customer can pay in the last seconds of the 1-minute QR window, after
             // the last throttled check and just before the page stops polling.
             // Give every order one extra check once its QR has expired so that
             // payment is still picked up (like regenerateQr, this is

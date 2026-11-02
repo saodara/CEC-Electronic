@@ -436,6 +436,7 @@
     </footer>
 
     @include('partials.loading-overlay')
+    @include('partials.password-toggle')
 
     @stack('scripts')
     <script>

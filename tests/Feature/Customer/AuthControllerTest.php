@@ -68,6 +68,7 @@ class AuthControllerTest extends TestCase
         $response = $this->post(route('customer.register.store'), [
             'name' => 'Jane Doe',
             'email' => 'jane@example.com',
+            'phone' => '012 345 678',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);
@@ -75,14 +76,27 @@ class AuthControllerTest extends TestCase
         $response->assertRedirect(route('account.dashboard'));
         $response->assertSessionHas('status', 'Account created.');
 
-        $this->assertDatabaseHas('users', ['email' => 'jane@example.com']);
+        $this->assertDatabaseHas('users', ['email' => 'jane@example.com', 'phone' => '012345678']);
         $this->assertAuthenticated();
     }
 
     public function test_registration_fails_without_required_fields(): void
     {
         $this->post(route('customer.register.store'), [])
-            ->assertSessionHasErrors(['name', 'email', 'password']);
+            ->assertSessionHasErrors(['name', 'email', 'phone', 'password']);
+
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_registration_fails_with_invalid_phone(): void
+    {
+        $this->post(route('customer.register.store'), [
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+            'phone' => 'not-a-phone',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertSessionHasErrors(['phone']);
 
         $this->assertDatabaseCount('users', 0);
     }
@@ -94,6 +108,7 @@ class AuthControllerTest extends TestCase
         $this->post(route('customer.register.store'), [
             'name' => 'Jane Doe',
             'email' => 'jane@example.com',
+            'phone' => '012 345 678',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ])->assertSessionHasErrors(['email']);
@@ -106,6 +121,7 @@ class AuthControllerTest extends TestCase
         $this->post(route('customer.register.store'), [
             'name' => 'Jane Doe',
             'email' => 'jane@example.com',
+            'phone' => '012 345 678',
             'password' => 'password123',
             'password_confirmation' => 'different-password',
         ])->assertSessionHasErrors(['password']);
@@ -123,6 +139,7 @@ class AuthControllerTest extends TestCase
         $this->post(route('customer.register.store'), [
             'name' => 'Jane Doe',
             'email' => 'jane@example.com',
+            'phone' => '012 345 678',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);

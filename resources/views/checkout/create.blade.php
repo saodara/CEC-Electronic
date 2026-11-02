@@ -34,28 +34,12 @@
                         <label>Phone<input name="customer_phone" value="{{ old('customer_phone') }}" required></label>
                         <label>Email<input name="customer_email" type="email" value="{{ old('customer_email', auth()->user()?->email) }}"></label>
                         <label>City<input name="city" value="{{ old('city', 'Phnom Penh') }}" required></label>
-                        <label style="grid-column:1 / -1">Address line 1<input name="address_line_1" value="{{ old('address_line_1') }}" required></label>
-                        <label style="grid-column:1 / -1">Address line 2<input name="address_line_2" value="{{ old('address_line_2') }}"></label>
-                        <label>Province<input name="province" value="{{ old('province') }}"></label>
-                        <label>Country<input name="country" value="{{ old('country', 'Cambodia') }}"></label>
+                        <label style="grid-column:1 / -1">Address<input name="address_line_1" value="{{ old('address_line_1') }}" required></label>
                         <label style="grid-column:1 / -1">Notes<textarea name="notes" style="min-height:80px">{{ old('notes') }}</textarea></label>
                     </div>
                     @if($errors->any())
                         <div style="color:#e11d48;margin-top:12px;font-weight:700">Please check the form fields.</div>
                     @endif
-                </div>
-
-                <div class="panel checkout-section">
-                    <div class="checkout-section-head">
-                        <span class="icon">&#128666;</span>
-                        <h3>Shipping method</h3>
-                    </div>
-                    <label>
-                        <select name="shipping_method">
-                            <option value="standard">Standard delivery — Free</option>
-                            <option value="express">Same-day Phnom Penh</option>
-                        </select>
-                    </label>
                 </div>
 
                 <div class="panel checkout-section">
@@ -79,15 +63,6 @@
                             <span class="payment-option-body">
                                 <strong>Cash on delivery</strong>
                                 <span>Pay with cash when your order arrives</span>
-                            </span>
-                            <span class="payment-option-check"></span>
-                        </label>
-                        <label class="payment-option">
-                            <input type="radio" name="payment_method" value="bank_transfer" data-payment-method>
-                            <span class="payment-option-icon">&#127974;</span>
-                            <span class="payment-option-body">
-                                <strong>Bank transfer</strong>
-                                <span>Transfer to our bank account and we'll confirm manually</span>
                             </span>
                             <span class="payment-option-check"></span>
                         </label>

@@ -116,6 +116,29 @@
         .pager-page.active{background:var(--brand);color:#fff}
         .pager-dots{min-width:24px;text-align:center;color:var(--muted)}
         .pager-summary{text-align:center;color:var(--muted);font-size:12.5px;margin-top:8px}
+        .pay-bell{position:relative}
+        .pay-bell-btn{position:relative;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#f8fbff;cursor:pointer;font-size:18px;display:grid;place-items:center}
+        .pay-bell-btn.ring{animation:bell-ring .9s ease 2}
+        @keyframes bell-ring{0%,100%{transform:rotate(0)}20%{transform:rotate(-16deg)}40%{transform:rotate(14deg)}60%{transform:rotate(-10deg)}80%{transform:rotate(6deg)}}
+        .pay-bell-count{position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--danger);color:#fff;font-size:11px;font-weight:900;display:grid;place-items:center;border:2px solid #fff}
+        .pay-bell-count[hidden]{display:none}
+        .pay-bell-menu{position:absolute;right:0;top:48px;width:330px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 18px 40px rgba(16,24,40,.16);z-index:30;overflow:hidden}
+        .pay-bell-menu[hidden]{display:none}
+        .pay-bell-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);font-weight:800}
+        .pay-bell-head a{color:var(--brand);font-size:12.5px}
+        .pay-bell-list{max-height:340px;overflow:auto}
+        .pay-bell-item{display:flex;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+        .pay-bell-item:last-child{border-bottom:0}
+        .pay-bell-item:hover{background:#f8fbff}
+        .pay-bell-item small{display:block;color:var(--muted);margin-top:2px}
+        .pay-bell-empty{padding:16px 14px;color:var(--muted);margin:0}
+        .pay-toasts{position:fixed;right:18px;bottom:18px;display:grid;gap:10px;z-index:9999;max-width:calc(100vw - 32px)}
+        .pay-toast{display:flex;align-items:center;gap:12px;width:340px;max-width:100%;padding:14px;border-radius:10px;background:#fff;border:1px solid #b7ebc9;border-left:5px solid #087443;box-shadow:0 18px 40px rgba(16,24,40,.18);animation:toast-in .25s ease}
+        .pay-toast .icon{width:36px;height:36px;border-radius:50%;background:#087443;color:#fff;display:grid;place-items:center;font-size:17px;flex:0 0 auto}
+        .pay-toast strong{display:block}
+        .pay-toast span{font-size:12.5px;color:var(--muted)}
+        .pay-toast button{margin-left:auto;border:0;background:none;font-size:18px;color:var(--muted);cursor:pointer;align-self:flex-start}
+        @keyframes toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
         @media (max-width:900px){
             .app{grid-template-columns:1fr}
             .sidebar{position:static;height:auto}
@@ -154,6 +177,21 @@
             <header class="top">
                 <h1>@yield('heading', 'Admin Panel')</h1>
                 <div style="display:flex;gap:10px;align-items:center">
+                    <div class="pay-bell" id="payBell">
+                        <button class="pay-bell-btn" id="payBellBtn" type="button" aria-label="Payment alerts" title="Payment alerts">
+                            &#128276;
+                            <span class="pay-bell-count" id="payBellCount" hidden>0</span>
+                        </button>
+                        <div class="pay-bell-menu" id="payBellMenu" hidden>
+                            <div class="pay-bell-head">
+                                <span>New payments</span>
+                                <a href="{{ route('admin.orders.index') }}">View orders</a>
+                            </div>
+                            <div class="pay-bell-list" id="payBellList">
+                                <p class="pay-bell-empty">No new payments.</p>
+                            </div>
+                        </div>
+                    </div>
                     @auth
                         <span class="admin-chip">
                             <span class="admin-avatar">{{ strtoupper(substr(auth()->user()->name ?? 'A', 0, 1)) }}</span>
@@ -182,6 +220,89 @@
     </div>
 
     @include('partials.loading-overlay')
+
+    <div class="pay-toasts" id="payToasts" aria-live="polite"></div>
+
+    <script>
+        (function () {
+            var endpoint = @json(route('admin.payment-notifications'));
+            var btn = document.getElementById('payBellBtn');
+            var menu = document.getElementById('payBellMenu');
+            var countEl = document.getElementById('payBellCount');
+            var list = document.getElementById('payBellList');
+            var toasts = document.getElementById('payToasts');
+            var known = null; // ids already shown; null until the first load
+
+            function esc(s) {
+                return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+                });
+            }
+
+            function beep() {
+                try {
+                    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    [880, 1320].forEach(function (freq, i) {
+                        var o = ctx.createOscillator(), g = ctx.createGain();
+                        o.frequency.value = freq;
+                        o.connect(g); g.connect(ctx.destination);
+                        var t = ctx.currentTime + i * 0.18;
+                        g.gain.setValueAtTime(0.0001, t);
+                        g.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+                        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+                        o.start(t); o.stop(t + 0.17);
+                    });
+                } catch (e) {}
+            }
+
+            function toast(o) {
+                var el = document.createElement('a');
+                el.className = 'pay-toast';
+                el.href = o.url;
+                el.innerHTML = '<span class="icon">&#10003;</span><div><strong>Payment received: $' + esc(o.grand_total) + '</strong>'
+                    + '<span>' + esc(o.order_number) + ' &middot; ' + esc(o.customer_name) + ' &middot; ' + esc(o.payment_method) + '</span></div>'
+                    + '<button type="button" aria-label="Dismiss">&times;</button>';
+                el.querySelector('button').addEventListener('click', function (e) { e.preventDefault(); el.remove(); });
+                toasts.appendChild(el);
+                setTimeout(function () { el.remove(); }, 15000);
+            }
+
+            function render(data) {
+                countEl.hidden = data.count < 1;
+                countEl.textContent = data.count > 99 ? '99+' : data.count;
+                document.title = (data.count > 0 ? '(' + data.count + ') ' : '') + document.title.replace(/^\(\d+\+?\)\s/, '');
+
+                list.innerHTML = data.orders.length ? data.orders.map(function (o) {
+                    return '<a class="pay-bell-item" href="' + esc(o.url) + '"><div><strong>' + esc(o.order_number) + '</strong>'
+                        + '<small>' + esc(o.customer_name) + ' &middot; ' + esc(o.payment_method) + '</small></div>'
+                        + '<div style="text-align:right"><strong>$' + esc(o.grand_total) + '</strong><small>' + esc(o.paid_at) + '</small></div></a>';
+                }).join('') : '<p class="pay-bell-empty">No new payments.</p>';
+
+                var fresh = known === null ? [] : data.orders.filter(function (o) { return known.indexOf(o.id) === -1; });
+                known = (known || []).concat(data.orders.map(function (o) { return o.id; }));
+
+                if (fresh.length) {
+                    fresh.reverse().forEach(toast);
+                    beep();
+                    btn.classList.remove('ring'); void btn.offsetWidth; btn.classList.add('ring');
+                }
+            }
+
+            function poll() {
+                fetch(endpoint, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (data) { if (data) render(data); })
+                    .catch(function () {});
+            }
+
+            btn.addEventListener('click', function (e) { e.stopPropagation(); menu.hidden = !menu.hidden; });
+            document.addEventListener('click', function (e) { if (!menu.contains(e.target)) menu.hidden = true; });
+
+            poll();
+            setInterval(function () { if (!document.hidden) poll(); }, 5000);
+            document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+        })();
+    </script>
 
     <script>
         document.addEventListener('input', function (e) {

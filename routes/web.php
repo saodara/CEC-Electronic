@@ -67,6 +67,7 @@ Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAd
     Route::resource('products', AdminProductController::class);
     Route::resource('categories', AdminCategoryController::class)->except(['show']);
     Route::resource('brands', AdminBrandController::class)->except(['show']);
+    Route::get('payment-notifications', [AdminOrderController::class, 'paymentNotifications'])->name('payment-notifications');
     Route::resource('orders', AdminOrderController::class)->only(['index', 'show', 'update']);
     Route::get('orders/{order}/receipt', [AdminOrderController::class, 'receipt'])->name('orders.receipt');
     Route::post('orders/{order}/verify-payment', [AdminOrderController::class, 'verifyPayment'])->name('orders.verify-payment');

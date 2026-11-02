@@ -8,6 +8,7 @@ use App\Models\DeliveryZone;
 use App\Models\Order;
 use App\Services\BakongService;
 use App\Services\ReceiptPdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -47,6 +48,34 @@ class OrderController extends Controller
         $deliveryZones = DeliveryZone::where('is_active', true)->orderBy('name')->get();
 
         return view('admin.orders.show', compact('order', 'deliveryProviders', 'deliveryZones'));
+    }
+
+    /**
+     * Polled by the admin layout to show live "payment received" alerts.
+     */
+    public function paymentNotifications(): JsonResponse
+    {
+        $query = Order::query()
+            ->whereNotNull('payment_confirmed_at')
+            ->whereNull('admin_payment_seen_at');
+
+        $orders = (clone $query)
+            ->latest('payment_confirmed_at')
+            ->take(10)
+            ->get(['id', 'order_number', 'customer_name', 'payment_method', 'grand_total', 'payment_confirmed_at']);
+
+        return response()->json([
+            'count' => $query->count(),
+            'orders' => $orders->map(fn (Order $order) => [
+                'id' => $order->id,
+                'order_number' => $order->order_number,
+                'customer_name' => $order->customer_name,
+                'payment_method' => strtoupper(str_replace('_', ' ', (string) $order->payment_method)),
+                'grand_total' => number_format((float) $order->grand_total, 2),
+                'paid_at' => $order->payment_confirmed_at?->diffForHumans(),
+                'url' => route('admin.orders.show', $order),
+            ]),
+        ]);
     }
 
     public function update(Request $request, Order $order): RedirectResponse

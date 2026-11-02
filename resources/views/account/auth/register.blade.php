@@ -27,6 +27,11 @@
             </label>
             @error('email') <div style="color:var(--danger);margin-top:6px">{{ $message }}</div> @enderror
 
+            <label style="display:block;margin-top:14px">Phone number
+                <input name="phone" type="tel" inputmode="tel" autocomplete="tel" value="{{ old('phone') }}" required>
+            </label>
+            @error('phone') <div style="color:var(--danger);margin-top:6px">{{ $message }}</div> @enderror
+
             <label style="display:block;margin-top:14px">Password
                 <input name="password" type="password" required>
             </label>

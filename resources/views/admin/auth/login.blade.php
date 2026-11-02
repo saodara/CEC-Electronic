@@ -51,5 +51,6 @@
         <button type="submit">Login to admin panel</button>
         <a href="{{ route('shop.home') }}">Back to store</a>
     </form>
+    @include('partials.password-toggle')
 </body>
 </html>

@@ -42,11 +42,15 @@ return [
         'access_token' => env('BAKONG_ACCESS_TOKEN'),
         'merchant_city' => env('BAKONG_MERCHANT_CITY', 'Phnom Penh'),
         // How long a generated KHQR stays payable before it closes.
-        'qr_expiry_seconds' => (int) env('BAKONG_QR_EXPIRY_SECONDS', 180),
+        'qr_expiry_seconds' => (int) env('BAKONG_QR_EXPIRY_SECONDS', 60),
         // Bakong caps check_transaction_by_md5 at ~100 requests/day for the
         // whole account. Keep a safety margin below that so the app never
         // gets everyone's pending orders stuck until the quota resets.
         'daily_check_limit' => (int) env('BAKONG_DAILY_CHECK_LIMIT', 90),
+        // While a customer's checkout page is open, ask Bakong about that
+        // order at most once per this many seconds. Lower = payment confirmed
+        // faster, but each order uses more of the daily check limit above.
+        'check_interval_seconds' => (int) env('BAKONG_CHECK_INTERVAL_SECONDS', 10),
     ],
 
 ];
