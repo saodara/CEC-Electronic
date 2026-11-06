@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\BrandController as AdminBrandController;
 use App\Http\Controllers\Admin\ExpenseController as AdminExpenseController;
 use App\Http\Controllers\Admin\InvoiceController as AdminInvoiceController;
 use App\Http\Controllers\Admin\PurchaseOrderController as AdminPurchaseOrderController;
+use App\Http\Controllers\Admin\StockAdjustmentController as AdminStockAdjustmentController;
 use App\Http\Controllers\Admin\BusinessReportController as AdminBusinessReportController;
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
@@ -109,6 +110,7 @@ Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAd
     Route::post('orders/{order}/invoice', [AdminInvoiceController::class, 'store'])->name('invoices.store');
     Route::get('invoices/{invoice}', [AdminInvoiceController::class, 'show'])->name('invoices.show');
     Route::get('invoices/{invoice}/pdf', [AdminInvoiceController::class, 'pdf'])->name('invoices.pdf');
+    Route::resource('stock-adjustments', AdminStockAdjustmentController::class)->only(['index', 'create', 'store']);
     Route::resource('expenses', AdminExpenseController::class)->except(['show']);
     Route::get('reports/profit-loss', [AdminBusinessReportController::class, 'profitLoss'])->name('reports.profit-loss');
     Route::get('reports/products', [AdminBusinessReportController::class, 'products'])->name('reports.products');
