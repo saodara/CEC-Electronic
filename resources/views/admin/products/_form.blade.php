@@ -54,7 +54,7 @@
 
     <div class="field">
         <label for="stock_quantity">Stock quantity</label>
-        <input id="stock_quantity" name="stock_quantity" type="number" min="0" value="{{ old('stock_quantity', $product->stock_quantity ?? 0) }}">
+        <input id="stock_quantity" name="stock_quantity" type="number" value="{{ old('stock_quantity', $product->stock_quantity ?? 0) }}">
         @error('stock_quantity') <span class="error">{{ $message }}</span> @enderror
     </div>
 

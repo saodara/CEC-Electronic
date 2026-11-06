@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 class CheckoutService
 {
-    public function __construct(private CartService $cartService)
+    public function __construct(private CartService $cartService, private OrderStock $orderStock)
     {
     }
 
@@ -57,9 +57,12 @@ class CheckoutService
                     'sku' => $item->product?->sku,
                     'quantity' => $item->quantity,
                     'unit_price' => $item->unit_price,
+                    'unit_cost' => $item->product?->cost_price,
                     'line_total' => $item->line_total,
                 ]);
             }
+
+            $this->orderStock->sync($order);
 
             $this->cartService->clear($request);
 

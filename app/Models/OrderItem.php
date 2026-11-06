@@ -14,6 +14,7 @@ class OrderItem extends Model
         'sku',
         'quantity',
         'unit_price',
+        'unit_cost',
         'line_total',
     ];
 
@@ -22,6 +23,7 @@ class OrderItem extends Model
         return [
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
+            'unit_cost' => 'decimal:2',
             'line_total' => 'decimal:2',
         ];
     }

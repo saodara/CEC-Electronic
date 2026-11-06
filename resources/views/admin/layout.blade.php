@@ -168,22 +168,40 @@
                 </span>
             </a>
             <nav class="nav">
+                <span class="nav-label">System</span>
                 <a href="{{ route('admin.dashboard') }}" @class(['active' => request()->routeIs('admin.dashboard')])><span class="nav-icon">&#128202;</span>Dashboard</a>
-                <a href="{{ route('admin.products.index') }}" @class(['active' => request()->routeIs('admin.products.*')])><span class="nav-icon">&#128421;</span>Products</a>
-                <a href="{{ route('admin.categories.index') }}" @class(['active' => request()->routeIs('admin.categories.*')])><span class="nav-icon">&#128194;</span>Categories</a>
-                <a href="{{ route('admin.brands.index') }}" @class(['active' => request()->routeIs('admin.brands.*')])><span class="nav-icon">&#127991;</span>Brands</a>
-                <a href="{{ route('admin.suppliers.index') }}" @class(['active' => request()->routeIs('admin.suppliers.*')])><span class="nav-icon">&#128666;</span>Suppliers</a>
-                <a href="{{ route('admin.orders.index') }}" @class(['active' => request()->routeIs('admin.orders.*')])><span class="nav-icon">&#129534;</span>Sale Orders</a>
-                <a href="{{ route('admin.customers.index') }}" @class(['active' => request()->routeIs('admin.customers.*')])><span class="nav-icon">&#128101;</span>Customers</a>
+                <a href="{{ route('admin.products.index') }}" @class(['active' => request()->routeIs('admin.products.*')])><span class="nav-icon">&#128421;</span>Product</a>
+                <a href="{{ route('admin.categories.index') }}" @class(['active' => request()->routeIs('admin.categories.*')])><span class="nav-icon">&#128194;</span>Category</a>
+                <a href="{{ route('admin.brands.index') }}" @class(['active' => request()->routeIs('admin.brands.*')])><span class="nav-icon">&#127991;</span>Brand</a>
+
+                <span class="nav-label">Purchasing</span>
+                <a href="{{ route('admin.suppliers.index') }}" @class(['active' => request()->routeIs('admin.suppliers.*')])><span class="nav-icon">&#128666;</span>Supplier</a>
+                <a href="{{ route('admin.purchase-orders.index') }}" @class(['active' => request()->routeIs('admin.purchase-orders.*')])><span class="nav-icon">&#128221;</span>Purchase Order</a>
+                <a href="{{ route('admin.bills.index') }}" @class(['active' => request()->routeIs('admin.bills.*')])><span class="nav-icon">&#128179;</span>Bill</a>
+
+                <span class="nav-label">Sales</span>
+                <a href="{{ route('admin.customers.index') }}" @class(['active' => request()->routeIs('admin.customers.*')])><span class="nav-icon">&#128101;</span>Customer</a>
+                <a href="{{ route('admin.orders.index') }}" @class(['active' => request()->routeIs('admin.orders.*')])><span class="nav-icon">&#129534;</span>Sale Order</a>
+                <a href="{{ route('admin.invoices.index') }}" @class(['active' => request()->routeIs('admin.invoices.*')])><span class="nav-icon">&#128196;</span>Invoice</a>
                 <a href="{{ route('admin.delivery-zones.index') }}" @class(['active' => request()->routeIs('admin.delivery-zones.*')])><span class="nav-icon">&#128230;</span>Delivery</a>
+
+                <span class="nav-label">Stock &amp; Expenses</span>
+                <a href="{{ route('admin.stock-adjustments.index') }}" @class(['active' => request()->routeIs('admin.stock-adjustments.*')])><span class="nav-icon">&#128451;</span>Stock Adjustment (+/-)</a>
+                <a href="{{ route('admin.expenses.index') }}" @class(['active' => request()->routeIs('admin.expenses.*')])><span class="nav-icon">&#128184;</span>Expenses</a>
+
+                <span class="nav-label">Reports</span>
                 <details class="nav-group" @if(request()->routeIs('admin.reports.*')) open @endif>
-                    <summary><span class="nav-icon">&#128200;</span>Reports<span class="nav-caret">&#9662;</span></summary>
+                    <summary><span class="nav-icon">&#128200;</span>Report<span class="nav-caret">&#9662;</span></summary>
                     <div class="nav-sub">
                         @foreach(['day' => 'Daily', 'week' => 'Weekly', 'month' => 'Monthly', 'year' => 'Yearly'] as $reportPeriod => $reportLabel)
                             <a href="{{ route('admin.reports.orders', ['period' => $reportPeriod]) }}" @class(['active' => request()->routeIs('admin.reports.*') && request()->route('period') === $reportPeriod])>{{ $reportLabel }}</a>
                         @endforeach
+                        @foreach(['profit-loss' => 'Profit & Loss', 'products' => 'Product Revenue', 'customers' => 'Customer', 'suppliers' => 'Supplier'] as $reportRoute => $reportLabel)
+                            <a href="{{ route('admin.reports.'.$reportRoute) }}" @class(['active' => request()->routeIs('admin.reports.'.$reportRoute)])>{{ $reportLabel }}</a>
+                        @endforeach
                     </div>
                 </details>
+
                 <span class="nav-label">Storefront</span>
                 <a href="/"><span class="nav-icon">&#127978;</span>View Store</a>
             </nav>
@@ -229,6 +247,12 @@
                 @if(session('status'))
                     <div class="notice"><span class="notice-icon">&#10003;</span>{{ session('status') }}</div>
                 @endif
+
+                @foreach(['purchase_order', 'bill', 'invoice', 'supplier'] as $noticeField)
+                    @error($noticeField)
+                        <div class="notice" style="background:#fee4e2;color:#b42318;border-color:#fecdca">{{ $message }}</div>
+                    @enderror
+                @endforeach
 
                 @yield('content')
             </main>

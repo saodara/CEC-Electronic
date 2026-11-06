@@ -19,8 +19,8 @@ class PurchaseOrderItem extends Model
     {
         return [
             'quantity' => 'integer',
-            'unit_cost' => 'integer',
-            'line_total' => 'integer',
+            'unit_cost' => 'decimal:2',
+            'line_total' => 'decimal:2',
         ];
     }
 

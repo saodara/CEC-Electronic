@@ -18,11 +18,6 @@ use Illuminate\View\View;
 class ReportController extends Controller
 {
     /**
-     * Orders are stored in UTC, but report periods follow the shop's local calendar.
-     */
-    private const SHOP_TIMEZONE = 'Asia/Phnom_Penh';
-
-    /**
      * dompdf needs about 100 MB for this many table rows, and PHP's default memory limit is 128 MB.
      */
     private const PDF_ORDER_LIMIT = 200;
@@ -50,7 +45,7 @@ class ReportController extends Controller
             'previousDate' => $previousStart->toDateString(),
             'nextDate' => $rangeEnd->lte($today) ? $rangeEnd->toDateString() : null,
             'orders' => $orders,
-            'timezone' => self::SHOP_TIMEZONE,
+            'timezone' => config('app.shop_timezone'),
             ...$this->totals($periodOrders),
         ]);
     }
@@ -66,8 +61,8 @@ class ReportController extends Controller
             'paidOnly' => $this->paidOnly($period),
             'periodLabel' => $this->periodLabel($period, $rangeStart, $rangeEnd),
             'orders' => (clone $periodOrders)->withCount('items')->latest()->take(self::PDF_ORDER_LIMIT)->get(),
-            'timezone' => self::SHOP_TIMEZONE,
-            'generatedAt' => CarbonImmutable::now(self::SHOP_TIMEZONE),
+            'timezone' => config('app.shop_timezone'),
+            'generatedAt' => CarbonImmutable::now(config('app.shop_timezone')),
             ...$this->totals($periodOrders),
         ])->setPaper('a4');
 
@@ -83,7 +78,7 @@ class ReportController extends Controller
 
     private function today(): CarbonImmutable
     {
-        return CarbonImmutable::now(self::SHOP_TIMEZONE)->startOfDay();
+        return CarbonImmutable::now(config('app.shop_timezone'))->startOfDay();
     }
 
     /**
@@ -157,7 +152,7 @@ class ReportController extends Controller
             return $today;
         }
 
-        return CarbonImmutable::createFromFormat('Y-m-d', $date, self::SHOP_TIMEZONE)->startOfDay();
+        return CarbonImmutable::createFromFormat('Y-m-d', $date, config('app.shop_timezone'))->startOfDay();
     }
 
     /**
@@ -169,7 +164,7 @@ class ReportController extends Controller
     {
         $firstOrderAt = Order::query()->min('created_at');
         $firstYear = $firstOrderAt
-            ? CarbonImmutable::parse($firstOrderAt, 'UTC')->setTimezone(self::SHOP_TIMEZONE)->year
+            ? CarbonImmutable::parse($firstOrderAt, 'UTC')->setTimezone(config('app.shop_timezone'))->year
             : $today->year;
 
         return range(max($today->year, $selected->year), min($firstYear, $selected->year));

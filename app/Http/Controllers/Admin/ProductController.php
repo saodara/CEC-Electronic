@@ -131,7 +131,8 @@ class ProductController extends Controller
             'price' => ['required', 'numeric', 'min:0.01'],
             'compare_at_price' => ['nullable', 'numeric', 'min:0.01'],
             'cost_price' => ['nullable', 'numeric', 'min:0.01'],
-            'stock_quantity' => ['nullable', 'integer', 'min:0'],
+            // Below zero means pre-orders are waiting for stock.
+            'stock_quantity' => ['nullable', 'integer'],
             'sku' => ['nullable', 'string', 'max:120', Rule::unique('products', 'sku')->ignore($product?->id)],
             'is_active' => ['nullable', 'boolean'],
             'is_featured' => ['nullable', 'boolean'],

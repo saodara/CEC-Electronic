@@ -2,14 +2,25 @@
 
 namespace App\Models;
 
+use App\Services\OrderStock;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::updated(function (Order $order) {
+            if ($order->wasChanged(['status', 'payment_status'])) {
+                app(OrderStock::class)->sync($order);
+            }
+        });
+    }
 
     protected $fillable = [
         'order_number',
@@ -56,6 +67,7 @@ class Order extends Model
             'admin_payment_seen_at' => 'datetime',
             'shipped_at' => 'datetime',
             'delivered_at' => 'datetime',
+            'stock_deducted_at' => 'datetime',
         ];
     }
 
@@ -94,6 +106,11 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
     }
 
     public function items(): HasMany

@@ -13,6 +13,11 @@
             @if($order->payment_status === 'paid')
                 <a class="btn" href="{{ route('admin.orders.receipt', $order) }}">Download receipt</a>
             @endif
+            @if($order->invoice)
+                <a class="btn" href="{{ route('admin.invoices.show', $order->invoice) }}">Open invoice</a>
+            @elseif($order->status !== 'cancelled')
+                <form action="{{ route('admin.invoices.store', $order) }}" method="post">@csrf<button class="btn" type="submit">Create invoice</button></form>
+            @endif
             <a class="btn secondary" href="{{ route('admin.orders.index') }}">Back to orders</a>
         </div>
     </div>

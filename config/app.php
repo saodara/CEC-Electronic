@@ -73,6 +73,9 @@ return [
 
     'timezone' => 'UTC',
 
+    // Dates and report periods follow the shop's calendar; timestamps are stored in UTC.
+    'shop_timezone' => 'Asia/Phnom_Penh',
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
