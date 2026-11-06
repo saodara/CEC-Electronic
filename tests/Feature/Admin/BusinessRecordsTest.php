@@ -5,9 +5,8 @@ namespace Tests\Feature\Admin;
 use App\Models\Expense;
 use App\Models\Invoice;
 use App\Models\Order;
-use App\Models\Product;
-use App\Models\StockAdjustment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class BusinessRecordsTest extends TestCase
@@ -43,39 +42,13 @@ class BusinessRecordsTest extends TestCase
         $this->assertSame(0, Invoice::count());
     }
 
-    public function test_stock_adjustment_changes_stock_and_keeps_a_record(): void
+    public function test_stock_adjustment_feature_is_gone(): void
     {
         $this->actingAsAdmin();
-        $product = Product::factory()->create(['stock_quantity' => 10]);
 
-        $this->post(route('admin.stock-adjustments.store'), [
-            'product_id' => $product->id, 'direction' => 'remove', 'quantity' => 4, 'reason' => 'Damaged',
-        ])->assertSessionHasNoErrors();
-        $this->assertSame(6, $product->fresh()->stock_quantity);
-
-        $this->post(route('admin.stock-adjustments.store'), [
-            'product_id' => $product->id, 'direction' => 'add', 'quantity' => 1, 'reason' => 'Customer return',
-        ])->assertSessionHasNoErrors();
-        $this->assertSame(7, $product->fresh()->stock_quantity);
-
-        $latest = StockAdjustment::latest('id')->firstOrFail();
-        $this->assertSame(1, $latest->quantity_change);
-        $this->assertSame(7, $latest->stock_after);
-        $this->get(route('admin.stock-adjustments.index'))->assertOk()->assertSee('Removed 4')->assertSee('Added 1');
-        $this->get(route('admin.stock-adjustments.create'))->assertOk();
-    }
-
-    public function test_stock_cannot_go_below_zero(): void
-    {
-        $this->actingAsAdmin();
-        $product = Product::factory()->create(['stock_quantity' => 2]);
-
-        $this->post(route('admin.stock-adjustments.store'), [
-            'product_id' => $product->id, 'direction' => 'remove', 'quantity' => 3, 'reason' => 'Damaged',
-        ])->assertSessionHasErrors('quantity');
-
-        $this->assertSame(2, $product->fresh()->stock_quantity);
-        $this->assertSame(0, StockAdjustment::count());
+        $this->get('/admin/stock-adjustments')->assertNotFound();
+        $this->get(route('admin.dashboard'))->assertOk()->assertDontSee('Stock Adjustment');
+        $this->assertFalse(Schema::hasTable('stock_adjustments'));
     }
 
     public function test_expenses_can_be_added_changed_and_deleted(): void

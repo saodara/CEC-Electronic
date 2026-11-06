@@ -26,7 +26,7 @@ class AdminMenuTest extends TestCase
             'Dashboard', 'Product', 'Category',
             'Supplier', 'Purchase Order', 'Bill',
             'Customer', 'Sale Order', 'Invoice',
-            'Stock Adjustment', 'Expenses',
+            'Expenses',
             'Report', 'Profit & Loss', 'Product Revenue', 'Customer', 'Supplier',
         ], $items);
         $this->assertStringContainsString('<span class="nav-label">System</span>', $nav);
@@ -47,7 +47,6 @@ class AdminMenuTest extends TestCase
             route('admin.customers.index'),
             route('admin.orders.index'),
             route('admin.invoices.index'),
-            route('admin.stock-adjustments.index'),
             route('admin.expenses.index'),
             route('admin.reports.profit-loss'),
             route('admin.reports.products'),
