@@ -58,6 +58,8 @@
                 </form>
                 <a class="btn secondary" href="{{ route('shop.cart') }}">View cart</a>
             </div>
+
+            <a class="btn secondary" style="width:100%;margin-top:10px" href="https://t.me/share/url?{{ http_build_query(['url' => route('shop.product', $product->slug), 'text' => $product->name.' - $'.number_format($product->price, 2)], '', '&', PHP_QUERY_RFC3986) }}" target="_blank" rel="noopener">Share to Telegram</a>
         </aside>
     </section>
 @endsection

@@ -88,6 +88,26 @@ class CatalogControllerTest extends TestCase
         $response->assertViewHas('categoryName', 'Gaming accessories');
     }
 
+    public function test_product_page_can_be_shared_to_telegram(): void
+    {
+        $product = Product::factory()->create([
+            'name' => 'Mouse & Keyboard',
+            'slug' => 'mouse-keyboard',
+            'price' => 1250,
+            'is_active' => true,
+        ]);
+
+        $query = http_build_query([
+            'url' => route('shop.product', 'mouse-keyboard'),
+            'text' => 'Mouse & Keyboard - $1,250.00',
+        ], '', '&', PHP_QUERY_RFC3986);
+
+        $this->get(route('shop.product', $product->slug))
+            ->assertOk()
+            ->assertSee('Share to Telegram')
+            ->assertSee('href="https://t.me/share/url?'.e($query).'" target="_blank" rel="noopener"', false);
+    }
+
     public function test_product_page_shows_existing_product_by_slug(): void
     {
         $product = Product::factory()->create(['slug' => 'my-cool-product']);
