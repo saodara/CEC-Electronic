@@ -372,11 +372,11 @@ class OrderReportTest extends TestCase
             ->assertSee(route('admin.reports.orders.pdf', ['period' => 'week', 'date' => '2026-11-04']), false);
     }
 
-    public function test_sidebar_has_a_link_for_each_report(): void
+    public function test_report_pages_link_to_each_order_report(): void
     {
         $this->actingAsAdmin();
 
-        $response = $this->get(route('admin.dashboard'))->assertOk();
+        $response = $this->get(route('admin.reports.orders', ['period' => 'month']))->assertOk();
 
         foreach (['day', 'week', 'month', 'year'] as $period) {
             $response->assertSee(route('admin.reports.orders', ['period' => $period]));

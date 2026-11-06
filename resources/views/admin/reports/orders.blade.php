@@ -4,6 +4,8 @@
 @section('heading', 'Reports')
 
 @section('content')
+    @include('admin.reports._tabs')
+
     @php
         $statusClasses = [
             'pending' => 'orange',

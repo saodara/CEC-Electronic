@@ -9,9 +9,12 @@
             <h2 style="margin:0">Sale order management</h2>
             <p class="muted" style="margin:6px 0 0">Review customer orders, payment state, and fulfillment progress.</p>
         </div>
-        @if($paymentNotificationsCount > 0)
-            <span class="status unread">{{ $paymentNotificationsCount }} new payment {{ $paymentNotificationsCount === 1 ? 'notification' : 'notifications' }}</span>
-        @endif
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            @if($paymentNotificationsCount > 0)
+                <span class="status unread">{{ $paymentNotificationsCount }} new payment {{ $paymentNotificationsCount === 1 ? 'notification' : 'notifications' }}</span>
+            @endif
+            <a class="btn secondary" href="{{ route('admin.delivery-zones.index') }}">Delivery</a>
+        </div>
     </div>
 
     <div class="panel" style="overflow:hidden">

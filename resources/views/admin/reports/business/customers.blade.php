@@ -4,6 +4,8 @@
 @section('heading', 'Customer Report')
 
 @section('content')
+    @include('admin.reports._tabs')
+
     <div class="toolbar">
         <div>
             <h2 style="margin:0">Customers: {{ $from->format('j M Y') }} - {{ $to->format('j M Y') }}</h2>

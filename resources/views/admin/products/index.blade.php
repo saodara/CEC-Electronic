@@ -9,7 +9,10 @@
             <h2 style="margin:0">Product catalog</h2>
             <p class="muted" style="margin:6px 0 0">Manage names, categories, prices, images, and specs shown on the storefront.</p>
         </div>
-        <a class="btn" href="{{ route('admin.products.create') }}">Add product</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <a class="btn secondary" href="{{ route('admin.brands.index') }}">Brands</a>
+            <a class="btn" href="{{ route('admin.products.create') }}">Add product</a>
+        </div>
     </div>
 
     <form class="toolbar" method="get" action="{{ route('admin.products.index') }}" style="justify-content:flex-start;gap:10px">
