@@ -26,7 +26,7 @@ class AdminMenuTest extends TestCase
             'Dashboard', 'Product', 'Category',
             'Supplier', 'Purchase Order', 'Bill',
             'Customer', 'Sale Order', 'Invoice',
-            'Stock Adjustment (+-)', 'Expenses',
+            'Stock Adjustment', 'Expenses',
             'Report', 'Profit & Loss', 'Product Revenue', 'Customer', 'Supplier',
         ], $items);
         $this->assertStringContainsString('<span class="nav-label">System</span>', $nav);

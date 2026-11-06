@@ -182,7 +182,7 @@
                 <a href="{{ route('admin.orders.index') }}" @class(['active' => request()->routeIs('admin.orders.*', 'admin.delivery-zones.*')])><span class="nav-icon">&#129534;</span>Sale Order</a>
                 <a href="{{ route('admin.invoices.index') }}" @class(['active' => request()->routeIs('admin.invoices.*')])><span class="nav-icon">&#128196;</span>Invoice</a>
                 <span class="nav-sep"></span>
-                <a href="{{ route('admin.stock-adjustments.index') }}" @class(['active' => request()->routeIs('admin.stock-adjustments.*')])><span class="nav-icon">&#128451;</span>Stock Adjustment (+-)</a>
+                <a href="{{ route('admin.stock-adjustments.index') }}" @class(['active' => request()->routeIs('admin.stock-adjustments.*')])><span class="nav-icon">&#128451;</span>Stock Adjustment</a>
                 <a href="{{ route('admin.expenses.index') }}" @class(['active' => request()->routeIs('admin.expenses.*')])><span class="nav-icon">&#128184;</span>Expenses</a>
                 <span class="nav-sep"></span>
                 <details class="nav-group" @if(request()->routeIs('admin.reports.*')) open @endif>

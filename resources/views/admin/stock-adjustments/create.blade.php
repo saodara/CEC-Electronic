@@ -20,8 +20,8 @@
             <div class="field">
                 <label for="direction">Add or remove</label>
                 <select id="direction" name="direction" required>
-                    <option value="add" @selected(old('direction') === 'add')>Add to stock (+)</option>
-                    <option value="remove" @selected(old('direction') === 'remove')>Remove from stock (-)</option>
+                    <option value="add" @selected(old('direction') === 'add')>Add to stock</option>
+                    <option value="remove" @selected(old('direction') === 'remove')>Remove from stock</option>
                 </select>
             </div>
             <div class="field">

@@ -53,7 +53,6 @@ class ProductManagementTest extends TestCase
         $response = $this->post(route('admin.products.store'), [
             'name' => 'Wireless Mouse',
             'price' => 19.99,
-            'stock_quantity' => 10,
         ]);
 
         $response->assertRedirect(route('admin.products.index'));
@@ -64,6 +63,49 @@ class ProductManagementTest extends TestCase
             'slug' => 'wireless-mouse',
             'price' => 19.99,
         ]);
+    }
+
+    public function test_product_form_has_no_stock_quantity_field(): void
+    {
+        $this->actingAsAdmin();
+        $product = Product::factory()->create();
+
+        $this->get(route('admin.products.create'))->assertOk()->assertDontSee('Stock quantity');
+        $this->get(route('admin.products.edit', $product))->assertOk()->assertDontSee('Stock quantity');
+    }
+
+    public function test_new_product_starts_with_no_stock(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->post(route('admin.products.store'), [
+            'name' => 'Wireless Mouse',
+            'price' => 19.99,
+            'stock_quantity' => 10,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(0, Product::where('name', 'Wireless Mouse')->firstOrFail()->stock_quantity);
+    }
+
+    public function test_editing_a_product_keeps_its_stock(): void
+    {
+        $this->actingAsAdmin();
+        $product = Product::factory()->create(['stock_quantity' => 12]);
+
+        $this->put(route('admin.products.update', $product), [
+            'name' => $product->name,
+            'price' => 19.99,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(12, $product->fresh()->stock_quantity);
+
+        $this->put(route('admin.products.update', $product), [
+            'name' => $product->name,
+            'price' => 19.99,
+            'stock_quantity' => 99,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(12, $product->fresh()->stock_quantity);
     }
 
     public function test_store_generates_a_unique_slug_when_name_already_exists(): void

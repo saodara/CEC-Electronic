@@ -53,12 +53,6 @@
     </div>
 
     <div class="field">
-        <label for="stock_quantity">Stock quantity</label>
-        <input id="stock_quantity" name="stock_quantity" type="number" value="{{ old('stock_quantity', $product->stock_quantity ?? 0) }}">
-        @error('stock_quantity') <span class="error">{{ $message }}</span> @enderror
-    </div>
-
-    <div class="field">
         <label for="compare_at_price">Compare at price</label>
         <input id="compare_at_price" name="compare_at_price" type="number" min="0.01" step="0.01" value="{{ old('compare_at_price', $product->compare_at_price) }}">
         @error('compare_at_price') <span class="error">{{ $message }}</span> @enderror

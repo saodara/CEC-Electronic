@@ -61,7 +61,7 @@ class BusinessRecordsTest extends TestCase
         $latest = StockAdjustment::latest('id')->firstOrFail();
         $this->assertSame(1, $latest->quantity_change);
         $this->assertSame(7, $latest->stock_after);
-        $this->get(route('admin.stock-adjustments.index'))->assertOk()->assertSee('-4')->assertSee('+1');
+        $this->get(route('admin.stock-adjustments.index'))->assertOk()->assertSee('Removed 4')->assertSee('Added 1');
         $this->get(route('admin.stock-adjustments.create'))->assertOk();
     }
 

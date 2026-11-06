@@ -20,7 +20,7 @@
                     <tr>
                         <td>{{ $adjustment->created_at->copy()->setTimezone(config('app.shop_timezone'))->format('d M Y, H:i') }}</td>
                         <td>{{ $adjustment->product_name }}</td>
-                        <td><span class="status-text {{ $adjustment->quantity_change > 0 ? 'success' : 'danger' }}">{{ $adjustment->quantity_change > 0 ? '+' : '' }}{{ number_format($adjustment->quantity_change) }}</span></td>
+                        <td><span class="status-text {{ $adjustment->quantity_change > 0 ? 'success' : 'danger' }}">{{ $adjustment->quantity_change > 0 ? 'Added' : 'Removed' }} {{ number_format(abs($adjustment->quantity_change)) }}</span></td>
                         <td>{{ number_format($adjustment->stock_after) }}</td>
                         <td>{{ $adjustment->reason }}<div class="muted">{{ $adjustment->notes }}</div></td>
                         <td>{{ $adjustment->user?->name ?: 'Unknown' }}</td>
