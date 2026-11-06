@@ -55,6 +55,12 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
+    | The site's real address, for links in emails. Those can't use the request's
+    | host: an attacker could fake it to send a password reset link to their own site.
+    */
+    'public_url' => env('PUBLIC_URL', env('APP_URL', 'http://localhost')),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------

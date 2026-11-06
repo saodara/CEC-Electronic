@@ -88,7 +88,7 @@ class CatalogControllerTest extends TestCase
         $response->assertViewHas('categoryName', 'Gaming accessories');
     }
 
-    public function test_product_page_can_be_shared_to_telegram_facebook_and_message(): void
+    public function test_product_page_can_be_shared_to_telegram_and_messenger(): void
     {
         $product = Product::factory()->create([
             'name' => 'Mouse & Keyboard',
@@ -103,8 +103,13 @@ class CatalogControllerTest extends TestCase
         $this->get(route('shop.product', $product->slug))
             ->assertOk()
             ->assertSee('href="https://t.me/share/url?'.e($telegram).'" target="_blank" rel="noopener"', false)
-            ->assertSee('href="https://www.facebook.com/sharer/sharer.php?u='.rawurlencode($url).'" target="_blank" rel="noopener"', false)
-            ->assertSee('href="sms:?&amp;body='.rawurlencode('Mouse & Keyboard - $1,250.00 '.$url).'"', false);
+            ->assertSee('Share to Telegram')
+            ->assertSee('Share to Messenger')
+            ->assertDontSee('facebook.com/sharer')
+            ->assertSee('href="https://www.facebook.com/messages/" target="_blank"', false)
+            ->assertSee('data-share-text="Mouse &amp; Keyboard - $1,250.00"', false)
+            ->assertSee('data-share-url="'.$url.'"', false)
+            ->assertDontSee('sms:');
     }
 
     public function test_product_page_has_preview_tags_for_shared_links(): void

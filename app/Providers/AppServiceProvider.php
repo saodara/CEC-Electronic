@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Database\RetryingPostgresConnection;
 use App\Database\RetryingPostgresConnector;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Database\Connection;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
@@ -26,6 +27,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        ResetPassword::createUrlUsing(fn ($user, string $token) => rtrim(config('app.public_url'), '/')
+            .route('password.reset', ['token' => $token, 'email' => $user->getEmailForPasswordReset()], false));
+
         Connection::resolverFor('pgsql', fn ($connection, $database, $prefix, $config) => new RetryingPostgresConnection($connection, $database, $prefix, $config));
 
         // The default Tailwind pagination view renders unstyled here since the

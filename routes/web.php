@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Admin\SupplierController as AdminSupplierController;
 use App\Http\Controllers\Customer\AccountController;
 use App\Http\Controllers\Customer\AuthController as CustomerAuthController;
+use App\Http\Controllers\Customer\PasswordResetController as CustomerPasswordResetController;
 use App\Http\Controllers\Customer\ProfileController as CustomerProfileController;
 use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CatalogController;
@@ -47,6 +48,11 @@ Route::post('/register', [CustomerAuthController::class, 'store'])
 Route::post('/logout', [CustomerAuthController::class, 'logout'])
     ->name('customer.logout')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class]);
+
+Route::get('/forgot-password', [CustomerPasswordResetController::class, 'create'])->name('password.request');
+Route::post('/forgot-password', [CustomerPasswordResetController::class, 'store'])->middleware('throttle:5,1')->name('password.email');
+Route::get('/reset-password/{token}', [CustomerPasswordResetController::class, 'edit'])->name('password.reset');
+Route::post('/reset-password', [CustomerPasswordResetController::class, 'update'])->middleware('throttle:5,1')->name('password.store');
 
 Route::prefix('account')->name('account.')->group(function () {
     Route::get('/', [AccountController::class, 'dashboard'])->name('dashboard');

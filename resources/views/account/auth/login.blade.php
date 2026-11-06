@@ -32,6 +32,7 @@
                 <input name="password" type="password" required>
             </label>
             @error('password') <div style="color:var(--danger);margin-top:6px">{{ $message }}</div> @enderror
+            <a href="{{ route('password.request') }}" style="display:inline-block;margin-top:8px;color:var(--brand);font-weight:700">Forgot password?</a>
 
             <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
                 <input type="checkbox" name="remember" value="1" style="width:auto;margin:0">

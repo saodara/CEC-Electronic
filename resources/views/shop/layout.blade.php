@@ -372,7 +372,7 @@
 
             <div class="quick-actions">
                 @auth
-                    <a class="quick" href="{{ route('account.dashboard') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/boy-account.png') }}" alt="Account"></span><span><strong>Account</strong><span>{{ auth()->user()->name }}</span></span></a>
+                    <a class="quick" href="{{ route('account.dashboard') }}">@php($headerAvatarUrl = auth()->user()->avatarUrl())<span class="quick-icon" @style(['border-radius:50%' => $headerAvatarUrl])><img src="{{ $headerAvatarUrl ?: asset('images/ProfileAndOrder/boy-account.png') }}" alt="Account"></span><span><strong>Account</strong><span>{{ auth()->user()->name }}</span></span></a>
                 @else
                     <a class="quick" href="{{ route('customer.login') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/login-icon.png') }}" alt="Login"></span><span><strong>Login</strong><span>Customer account</span></span></a>
                     <a class="quick" href="{{ route('customer.register') }}"><span class="quick-icon"><img src="{{ asset('images/ProfileAndOrder/register-icon.jpeg') }}" alt="Register"></span><span><strong>Register</strong><span>New customer</span></span></a>

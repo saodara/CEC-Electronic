@@ -78,6 +78,34 @@ class ProfileControllerTest extends TestCase
         $this->actingAs($other)->get(route('account.avatar'))->assertNotFound();
     }
 
+    public function test_uploaded_picture_shows_in_the_header_my_account_and_edit_profile(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('shop.home'))
+            ->assertSee('images/ProfileAndOrder/boy-account.png');
+
+        $this->patch(route('account.profile.update'), [
+            'name' => $user->name,
+            'phone' => '012220152',
+            'avatar' => UploadedFile::fake()->image('me.png', 300, 300),
+        ])->assertSessionHasNoErrors();
+
+        $src = 'src="'.e($user->avatarUrl()).'"';
+
+        $this->get(route('shop.home'))
+            ->assertSee($src, false)
+            ->assertDontSee('images/ProfileAndOrder/boy-account.png');
+
+        foreach (['account.dashboard', 'account.profile'] as $page) {
+            $response = $this->get(route($page))->assertOk();
+            $this->assertGreaterThanOrEqual(2, substr_count($response->getContent(), $src), $page);
+        }
+
+        $this->get($user->avatarUrl())->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+    }
+
     public function test_new_picture_replaces_the_old_one(): void
     {
         $user = User::factory()->create();

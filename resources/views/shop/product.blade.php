@@ -11,24 +11,35 @@
     <meta property="og:image" content="{{ str_replace(' ', '%20', url($product->image_url)) }}">
     <style>
         .share-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-        .share-buttons .btn{flex:1 1 90px}
-        /* Sending a text message only works on phones and tablets. */
-        @media (hover:hover) and (pointer:fine){.share-message{display:none}}
+        .share-buttons .btn{flex:1 1 150px}
+        .share-status{margin-top:10px;padding:10px 12px;border-radius:6px;background:#eef5ff;color:var(--brand);font-weight:700;line-height:1.45}
     </style>
 @endpush
 
 @push('scripts')
     <script>
-        // On phones, open the share menu (Messages, Messenger and other apps). The sms: link is the fallback.
-        document.querySelector('.share-message').addEventListener('click', function (event) {
-            if (! navigator.share) return;
+        document.querySelector('.share-messenger').addEventListener('click', function (event) {
+            var data = this.dataset;
 
-            event.preventDefault();
-            navigator.share({
-                title: this.dataset.shareTitle,
-                text: this.dataset.shareText,
-                url: this.dataset.shareUrl,
-            }).catch(function () {});
+            // Phones have a share menu listing Messenger and their other chat apps.
+            if (navigator.share && window.matchMedia('(pointer: coarse)').matches) {
+                event.preventDefault();
+                navigator.share({ title: data.shareTitle, text: data.shareText, url: data.shareUrl }).catch(function () {});
+                return;
+            }
+
+            // Elsewhere the link opens Messenger chats, and websites can't fill in a chat,
+            // so copy the message to paste. This has to finish before the new tab takes focus.
+            var message = document.getElementById('shareMessage');
+            var copied = false;
+            document.getElementById('shareStatus').hidden = false;
+            message.value = data.shareText + ' ' + data.shareUrl;
+            message.select();
+            try { copied = document.execCommand('copy'); } catch (e) {}
+
+            document.getElementById('shareStatusText').textContent = copied
+                ? 'Message copied. In Messenger, choose a chat and paste it (Ctrl+V).'
+                : 'Copy this message, then choose a chat in Messenger and paste it.';
         });
     </script>
 @endpush
@@ -97,9 +108,12 @@
             <div style="margin-top:14px">
                 <strong>Share</strong>
                 <div class="share-buttons">
-                    <a class="btn secondary" href="https://t.me/share/url?{{ http_build_query(['url' => $shareUrl, 'text' => $shareText], '', '&', PHP_QUERY_RFC3986) }}" target="_blank" rel="noopener">Telegram</a>
-                    <a class="btn secondary" href="https://www.facebook.com/sharer/sharer.php?{{ http_build_query(['u' => $shareUrl], '', '&', PHP_QUERY_RFC3986) }}" target="_blank" rel="noopener">Facebook</a>
-                    <a class="btn secondary share-message" href="sms:?&amp;body={{ rawurlencode($shareText.' '.$shareUrl) }}" data-no-loader data-share-title="{{ $product->name }}" data-share-text="{{ $shareText }}" data-share-url="{{ $shareUrl }}">Message</a>
+                    <a class="btn secondary" href="https://t.me/share/url?{{ http_build_query(['url' => $shareUrl, 'text' => $shareText], '', '&', PHP_QUERY_RFC3986) }}" target="_blank" rel="noopener">Share to Telegram</a>
+                    <a class="btn secondary share-messenger" href="https://www.facebook.com/messages/" target="_blank" rel="noopener" data-no-loader data-share-title="{{ $product->name }}" data-share-text="{{ $shareText }}" data-share-url="{{ $shareUrl }}">Share to Messenger</a>
+                </div>
+                <div class="share-status" id="shareStatus" role="status" hidden>
+                    <span id="shareStatusText"></span>
+                    <input id="shareMessage" type="text" readonly aria-label="Message to share">
                 </div>
             </div>
         </aside>
