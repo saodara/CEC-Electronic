@@ -2,6 +2,37 @@
 
 @section('title', $product->name.' - CEC Electronic')
 
+@push('head')
+    <meta property="og:type" content="product">
+    <meta property="og:site_name" content="CEC Electronic">
+    <meta property="og:title" content="{{ $product->name }} - ${{ number_format($product->price, 2) }}">
+    <meta property="og:description" content="{{ \Illuminate\Support\Str::limit($product->description ?: 'Available now at CEC Electronic.', 160) }}">
+    <meta property="og:url" content="{{ route('shop.product', $product->slug) }}">
+    <meta property="og:image" content="{{ str_replace(' ', '%20', url($product->image_url)) }}">
+    <style>
+        .share-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+        .share-buttons .btn{flex:1 1 90px}
+        /* Sending a text message only works on phones and tablets. */
+        @media (hover:hover) and (pointer:fine){.share-message{display:none}}
+    </style>
+@endpush
+
+@push('scripts')
+    <script>
+        // On phones, open the share menu (Messages, Messenger and other apps). The sms: link is the fallback.
+        document.querySelector('.share-message').addEventListener('click', function (event) {
+            if (! navigator.share) return;
+
+            event.preventDefault();
+            navigator.share({
+                title: this.dataset.shareTitle,
+                text: this.dataset.shareText,
+                url: this.dataset.shareUrl,
+            }).catch(function () {});
+        });
+    </script>
+@endpush
+
 @section('content')
     @php
         $image = $product->image_url;
@@ -59,7 +90,18 @@
                 <a class="btn secondary" href="{{ route('shop.cart') }}">View cart</a>
             </div>
 
-            <a class="btn secondary" style="width:100%;margin-top:10px" href="https://t.me/share/url?{{ http_build_query(['url' => route('shop.product', $product->slug), 'text' => $product->name.' - $'.number_format($product->price, 2)], '', '&', PHP_QUERY_RFC3986) }}" target="_blank" rel="noopener">Share to Telegram</a>
+            @php
+                $shareUrl = route('shop.product', $product->slug);
+                $shareText = $product->name.' - $'.number_format($product->price, 2);
+            @endphp
+            <div style="margin-top:14px">
+                <strong>Share</strong>
+                <div class="share-buttons">
+                    <a class="btn secondary" href="https://t.me/share/url?{{ http_build_query(['url' => $shareUrl, 'text' => $shareText], '', '&', PHP_QUERY_RFC3986) }}" target="_blank" rel="noopener">Telegram</a>
+                    <a class="btn secondary" href="https://www.facebook.com/sharer/sharer.php?{{ http_build_query(['u' => $shareUrl], '', '&', PHP_QUERY_RFC3986) }}" target="_blank" rel="noopener">Facebook</a>
+                    <a class="btn secondary share-message" href="sms:?&amp;body={{ rawurlencode($shareText.' '.$shareUrl) }}" data-no-loader data-share-title="{{ $product->name }}" data-share-text="{{ $shareText }}" data-share-url="{{ $shareUrl }}">Message</a>
+                </div>
+            </div>
         </aside>
     </section>
 @endsection

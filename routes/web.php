@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Admin\SupplierController as AdminSupplierController;
 use App\Http\Controllers\Customer\AccountController;
 use App\Http\Controllers\Customer\AuthController as CustomerAuthController;
+use App\Http\Controllers\Customer\ProfileController as CustomerProfileController;
 use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CatalogController;
 use App\Http\Controllers\Storefront\CheckoutController;
@@ -53,6 +54,15 @@ Route::prefix('account')->name('account.')->group(function () {
     Route::get('/orders/{order}', [AccountController::class, 'show'])->name('orders.show');
     Route::get('/orders/{order}/receipt', [AccountController::class, 'receipt'])->name('orders.receipt');
     Route::get('/orders/{order}/receipt/view', [AccountController::class, 'viewReceipt'])->name('orders.receipt.view');
+
+    Route::middleware('auth')->group(function () {
+        Route::get('/profile', [CustomerProfileController::class, 'edit'])->name('profile');
+        Route::patch('/profile', [CustomerProfileController::class, 'update'])->name('profile.update');
+        Route::put('/profile/email', [CustomerProfileController::class, 'updateEmail'])->middleware('throttle:10,1')->name('email.update');
+        Route::put('/profile/password', [CustomerProfileController::class, 'updatePassword'])->middleware('throttle:10,1')->name('password.update');
+        Route::get('/avatar', [CustomerProfileController::class, 'showAvatar'])->name('avatar');
+        Route::delete('/avatar', [CustomerProfileController::class, 'destroyAvatar'])->name('avatar.destroy');
+    });
 });
 
 Route::get('/admin/login', [AdminAuthController::class, 'create'])->name('admin.login');

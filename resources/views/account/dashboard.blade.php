@@ -4,11 +4,15 @@
 
 @section('content')
     <div class="section-head">
-        <div>
-            <h2>My account</h2>
-            <p>Track your CEC Electronic orders, payment status, and delivery progress.</p>
+        <div style="display:flex;align-items:center;gap:14px">
+            @include('account._avatar', ['user' => auth()->user(), 'size' => 56])
+            <div>
+                <h2>My account</h2>
+                <p>Track your CEC Electronic orders, payment status, and delivery progress.</p>
+            </div>
         </div>
         <span style="display:flex;gap:8px;flex-wrap:wrap">
+            <a class="btn" href="{{ route('account.profile') }}">Edit profile</a>
             <a class="btn secondary" href="{{ route('account.orders') }}">Order history</a>
             <form action="{{ route('customer.logout') }}" method="post">
                 @csrf

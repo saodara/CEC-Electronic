@@ -88,7 +88,7 @@ class CatalogControllerTest extends TestCase
         $response->assertViewHas('categoryName', 'Gaming accessories');
     }
 
-    public function test_product_page_can_be_shared_to_telegram(): void
+    public function test_product_page_can_be_shared_to_telegram_facebook_and_message(): void
     {
         $product = Product::factory()->create([
             'name' => 'Mouse & Keyboard',
@@ -97,15 +97,30 @@ class CatalogControllerTest extends TestCase
             'is_active' => true,
         ]);
 
-        $query = http_build_query([
-            'url' => route('shop.product', 'mouse-keyboard'),
-            'text' => 'Mouse & Keyboard - $1,250.00',
-        ], '', '&', PHP_QUERY_RFC3986);
+        $url = route('shop.product', 'mouse-keyboard');
+        $telegram = http_build_query(['url' => $url, 'text' => 'Mouse & Keyboard - $1,250.00'], '', '&', PHP_QUERY_RFC3986);
 
         $this->get(route('shop.product', $product->slug))
             ->assertOk()
-            ->assertSee('Share to Telegram')
-            ->assertSee('href="https://t.me/share/url?'.e($query).'" target="_blank" rel="noopener"', false);
+            ->assertSee('href="https://t.me/share/url?'.e($telegram).'" target="_blank" rel="noopener"', false)
+            ->assertSee('href="https://www.facebook.com/sharer/sharer.php?u='.rawurlencode($url).'" target="_blank" rel="noopener"', false)
+            ->assertSee('href="sms:?&amp;body='.rawurlencode('Mouse & Keyboard - $1,250.00 '.$url).'"', false);
+    }
+
+    public function test_product_page_has_preview_tags_for_shared_links(): void
+    {
+        $product = Product::factory()->create([
+            'name' => 'Mouse & Keyboard',
+            'slug' => 'mouse-keyboard',
+            'price' => 1250,
+            'image' => 'images/Product Image/photo one.jpg',
+        ]);
+
+        $this->get(route('shop.product', $product->slug))
+            ->assertOk()
+            ->assertSee('<meta property="og:title" content="Mouse &amp; Keyboard - $1,250.00">', false)
+            ->assertSee('<meta property="og:url" content="'.route('shop.product', 'mouse-keyboard').'">', false)
+            ->assertSee('images/Product%20Image/photo%20one.jpg">', false);
     }
 
     public function test_product_page_shows_existing_product_by_slug(): void

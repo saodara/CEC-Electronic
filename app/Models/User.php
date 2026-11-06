@@ -32,6 +32,16 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Null when the user has no picture. The version makes browsers fetch a replacement.
+     */
+    public function avatarUrl(): ?string
+    {
+        $updatedAt = UserAvatar::whereKey($this->id)->value('updated_at');
+
+        return $updatedAt ? route('account.avatar', ['v' => strtotime($updatedAt)]) : null;
+    }
+
     public function addresses(): HasMany
     {
         return $this->hasMany(CustomerAddress::class);

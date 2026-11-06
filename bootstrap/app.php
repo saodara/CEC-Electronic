@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // that so Laravel generates https:// URLs in production without
         // depending on APP_URL being set correctly on the host.
         $middleware->trustProxies(at: '*');
+        $middleware->redirectGuestsTo(fn () => route('customer.login'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

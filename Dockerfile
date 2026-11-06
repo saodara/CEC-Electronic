@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y \
     git \
     unzip \
     libpng-dev \
+    libjpeg62-turbo-dev \
+    libwebp-dev \
     libonig-dev \
     libxml2-dev \
     libzip-dev \
@@ -15,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # PHP extensions
-RUN docker-php-ext-install \
+RUN docker-php-ext-configure gd --with-jpeg --with-webp \
+    && docker-php-ext-install \
     pdo_pgsql \
     mbstring \
     exif \
@@ -25,6 +28,9 @@ RUN docker-php-ext-install \
     intl \
     zip \
     xml
+
+# Upload limits (PHP's default is 2 MB, smaller than many phone photos)
+RUN printf 'upload_max_filesize=8M\npost_max_size=10M\n' > /usr/local/etc/php/conf.d/uploads.ini
 
 # Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
