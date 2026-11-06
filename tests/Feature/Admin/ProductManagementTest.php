@@ -37,6 +37,33 @@ class ProductManagementTest extends TestCase
             ->assertViewHas('products');
     }
 
+    public function test_product_list_shows_qty_from_stock_adjustments(): void
+    {
+        $this->actingAsAdmin();
+        $product = Product::factory()->create(['stock_quantity' => 5]);
+
+        $this->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertSee('<th>Qty</th>', false)
+            ->assertSee('<td>5</td>', false)
+            ->assertSee('In stock');
+
+        $this->post(route('admin.stock-adjustments.store'), [
+            'product_id' => $product->id, 'direction' => 'add', 'quantity' => 3, 'reason' => 'Other',
+        ])->assertSessionHasNoErrors();
+
+        $this->get(route('admin.products.index'))->assertSee('<td>8</td>', false);
+
+        $this->post(route('admin.stock-adjustments.store'), [
+            'product_id' => $product->id, 'direction' => 'remove', 'quantity' => 8, 'reason' => 'Damaged',
+        ])->assertSessionHasNoErrors();
+
+        $this->get(route('admin.products.index'))
+            ->assertSee('<td>0</td>', false)
+            ->assertSee('Pre-order')
+            ->assertDontSee('In stock');
+    }
+
     public function test_admin_can_view_create_form(): void
     {
         $this->actingAsAdmin();

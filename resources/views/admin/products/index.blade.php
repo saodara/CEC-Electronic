@@ -38,6 +38,7 @@
                     <th>Brand</th>
                     <th>Supplier</th>
                     <th>Price</th>
+                    <th>Qty</th>
                     <th>Status</th>
                     <th style="text-align:right">Actions</th>
                 </tr>
@@ -58,7 +59,8 @@
                         <td>{{ $product->brand?->name ?: 'No brand' }}</td>
                         <td>{{ $product->supplier?->name ?: 'No supplier' }}</td>
                         <td>${{ number_format($product->price, 2) }}</td>
-                        <td><span class="status">In stock</span></td>
+                        <td>{{ number_format($product->stock_quantity) }}</td>
+                        <td><span @class(['status', 'warning' => $product->stock_quantity <= 0])>{{ $product->stock_quantity > 0 ? 'In stock' : 'Pre-order' }}</span></td>
                         <td>
                             <div class="actions">
                                 <a class="btn secondary" href="{{ route('shop.product', $product->slug) }}">View</a>
@@ -73,7 +75,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="muted">No products found.</td>
+                        <td colspan="8" class="muted">No products found.</td>
                     </tr>
                 @endforelse
             </tbody>
