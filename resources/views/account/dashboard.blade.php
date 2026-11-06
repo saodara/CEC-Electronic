@@ -21,19 +21,22 @@
         <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/order-icon.png') }}" alt="Orders"></span><span><strong>Orders</strong><span>{{ $orders->count() }} recent orders found.</span></span></div>
         <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/delivery-icon.png') }}" alt="Delivery"></span><span><strong>Delivery</strong><span>Track assigned delivery provider and status.</span></span></div>
         <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/warranty-icon.jpeg') }}" alt="Warranty"></span><span><strong>Warranty</strong><span>Keep order numbers for service support.</span></span></div>
-        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/support-icon.avif') }}" alt="Support"></span><span><strong>Support</strong><span>Call 012 220 152 for help.</span></span></div>
+        <a class="panel service" href="https://t.me/CECELECTRONICS" target="_blank" rel="noopener"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/support-icon.avif') }}" alt="Support"></span><span><strong>Support</strong><span>Telegram @@CECELECTRONICS or call 012 220 152.</span></span></a>
     </section>
 
     <div class="panel" style="padding:18px">
         <h3 style="margin-top:0">Recent orders</h3>
         @forelse($orders as $order)
-            <a href="{{ route('account.orders.show', $order) }}" style="display:grid;grid-template-columns:1fr 150px 120px;gap:12px;border-bottom:1px solid var(--line);padding:12px 0;align-items:center">
-                <span>
+            <a href="{{ route('account.orders.show', $order) }}" style="display:flex;flex-wrap:wrap;gap:6px 16px;border-bottom:1px solid var(--line);padding:12px 0;align-items:center">
+                <span style="flex:1 1 170px;min-width:0">
                     <strong>{{ $order->order_number }}</strong>
                     <span class="sku" style="display:block">{{ $order->created_at->format('M d, Y') }}</span>
                 </span>
-                <span>{{ ucfirst($order->status) }}</span>
-                <strong style="text-align:right">${{ number_format($order->grand_total, 2) }}</strong>
+                <span style="flex:0 1 300px;min-width:0">
+                    {{ ucfirst($order->status) }}
+                    <span class="sku" style="display:block">{{ $order->statusMeaning() }}</span>
+                </span>
+                <strong style="min-width:70px;margin-left:auto;text-align:right">${{ number_format($order->grand_total, 2) }}</strong>
             </a>
         @empty
             <p style="color:var(--muted)">No orders yet.</p>

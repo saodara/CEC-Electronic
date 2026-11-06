@@ -35,6 +35,14 @@
         .nav a .nav-icon{width:18px;text-align:center;font-size:15px;flex:0 0 auto}
         .nav a:hover{background:rgba(255,255,255,.08);color:#fff}
         .nav a.active{background:rgba(255,255,255,.14);color:#fff;border-left-color:var(--warning)}
+        .nav-group summary{padding:10px 12px;border-radius:7px;font-weight:700;display:flex;align-items:center;gap:11px;border-left:3px solid transparent;color:#c9defa;cursor:pointer;list-style:none}
+        .nav-group summary::-webkit-details-marker{display:none}
+        .nav-group summary .nav-icon{width:18px;text-align:center;font-size:15px;flex:0 0 auto}
+        .nav-group summary:hover{background:rgba(255,255,255,.08);color:#fff}
+        .nav-group[open] summary{color:#fff}
+        .nav-caret{margin-left:auto;font-size:11px;transition:transform .12s ease}
+        .nav-group[open] .nav-caret{transform:rotate(180deg)}
+        .nav-sub{display:grid;gap:4px;margin-top:4px;padding-left:29px}
         .main{min-width:0}
         .top{height:70px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:10;box-shadow:0 2px 10px rgba(16,24,40,.03)}
         .top h1{font-size:22px;margin:0}
@@ -165,9 +173,17 @@
                 <a href="{{ route('admin.categories.index') }}" @class(['active' => request()->routeIs('admin.categories.*')])><span class="nav-icon">&#128194;</span>Categories</a>
                 <a href="{{ route('admin.brands.index') }}" @class(['active' => request()->routeIs('admin.brands.*')])><span class="nav-icon">&#127991;</span>Brands</a>
                 <a href="{{ route('admin.suppliers.index') }}" @class(['active' => request()->routeIs('admin.suppliers.*')])><span class="nav-icon">&#128666;</span>Suppliers</a>
-                <a href="{{ route('admin.orders.index') }}" @class(['active' => request()->routeIs('admin.orders.*')])><span class="nav-icon">&#129534;</span>Orders</a>
+                <a href="{{ route('admin.orders.index') }}" @class(['active' => request()->routeIs('admin.orders.*')])><span class="nav-icon">&#129534;</span>Sale Orders</a>
                 <a href="{{ route('admin.customers.index') }}" @class(['active' => request()->routeIs('admin.customers.*')])><span class="nav-icon">&#128101;</span>Customers</a>
                 <a href="{{ route('admin.delivery-zones.index') }}" @class(['active' => request()->routeIs('admin.delivery-zones.*')])><span class="nav-icon">&#128230;</span>Delivery</a>
+                <details class="nav-group" @if(request()->routeIs('admin.reports.*')) open @endif>
+                    <summary><span class="nav-icon">&#128200;</span>Reports<span class="nav-caret">&#9662;</span></summary>
+                    <div class="nav-sub">
+                        @foreach(['day' => 'Daily', 'week' => 'Weekly', 'month' => 'Monthly', 'year' => 'Yearly'] as $reportPeriod => $reportLabel)
+                            <a href="{{ route('admin.reports.orders', ['period' => $reportPeriod]) }}" @class(['active' => request()->routeIs('admin.reports.*') && request()->route('period') === $reportPeriod])>{{ $reportLabel }}</a>
+                        @endforeach
+                    </div>
+                </details>
                 <span class="nav-label">Storefront</span>
                 <a href="/"><span class="nav-icon">&#127978;</span>View Store</a>
             </nav>

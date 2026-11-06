@@ -1,12 +1,12 @@
 @extends('admin.layout')
 
-@section('title', 'Orders - CEC Electronic Admin')
-@section('heading', 'Orders')
+@section('title', 'Sale Orders - CEC Electronic Admin')
+@section('heading', 'Sale Orders')
 
 @section('content')
     <div class="toolbar">
         <div>
-            <h2 style="margin:0">Order management</h2>
+            <h2 style="margin:0">Sale order management</h2>
             <p class="muted" style="margin:6px 0 0">Review customer orders, payment state, and fulfillment progress.</p>
         </div>
         @if($paymentNotificationsCount > 0)

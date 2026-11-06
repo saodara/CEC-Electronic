@@ -16,7 +16,10 @@
                         <strong style="white-space:nowrap">{{ $order->order_number }}</strong>
                         <div class="sku">{{ $order->created_at->format('M d, Y h:i A') }}</div>
                     </div>
-                    <span>{{ ucfirst($order->status) }} &middot; {{ ucfirst(str_replace('_', ' ', $order->payment_status)) }}</span>
+                    <span style="flex:0 1 300px;min-width:0">
+                        {{ ucfirst($order->status) }} &middot; {{ ucfirst(str_replace('_', ' ', $order->payment_status)) }}
+                        <span class="sku" style="display:block">{{ $order->statusMeaning() }}</span>
+                    </span>
                     <strong style="min-width:70px;margin-left:auto;text-align:right">${{ number_format($order->grand_total, 2) }}</strong>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">

@@ -64,6 +64,33 @@ class Order extends Model
         return $this->bakong_qr_expires_at !== null && $this->bakong_qr_expires_at->isPast();
     }
 
+    /**
+     * Plain-language explanation of the order's status for customers. Paying
+     * does not change `status`, so a pending order's meaning depends on its
+     * payment too.
+     */
+    public function statusMeaning(): string
+    {
+        return match ($this->status) {
+            'pending' => match (true) {
+                $this->payment_status === 'paid' => "Payment received. We'll start preparing your order soon.",
+                $this->payment_status === 'failed' => "Your payment didn't go through. Please call 012 220 152 for help.",
+                $this->payment_status === 'refunded' => 'Your payment was refunded.',
+                $this->payment_method === 'cash_on_delivery' => "We got your order and will confirm it soon. You'll pay on delivery.",
+                default => 'Waiting for your payment.',
+            },
+            'processing' => "We're preparing your order.",
+            'shipped' => 'Your order is on the way.',
+            'completed' => $this->payment_status === 'refunded'
+                ? 'Your payment for this order was refunded.'
+                : 'Your order is finished. Thank you for shopping with us!',
+            'cancelled' => $this->payment_status === 'refunded'
+                ? 'This order was cancelled and your payment refunded.'
+                : 'This order was cancelled.',
+            default => '',
+        };
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

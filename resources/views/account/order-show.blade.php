@@ -34,6 +34,7 @@
 
         <aside class="panel" style="padding:18px">
             <h3 style="margin-top:0">Order status</h3>
+            <p style="color:var(--muted);margin:0 0 12px">{{ $order->statusMeaning() }}</p>
             <div class="spec-table">
                 <div class="spec-row"><span>Status</span><strong>{{ ucfirst($order->status) }}</strong></div>
                 <div class="spec-row"><span>Payment</span><strong>{{ ucfirst(str_replace('_', ' ', $order->payment_status)) }}</strong></div>

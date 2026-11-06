@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\CustomerController as AdminCustomerController;
 use App\Http\Controllers\Admin\DeliveryZoneController as AdminDeliveryZoneController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Admin\SupplierController as AdminSupplierController;
 use App\Http\Controllers\Customer\AccountController;
 use App\Http\Controllers\Customer\AuthController as CustomerAuthController;
@@ -75,4 +76,6 @@ Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAd
     Route::get('customers/{phone}', [AdminCustomerController::class, 'show'])->name('customers.show');
     Route::resource('suppliers', AdminSupplierController::class)->except(['show']);
     Route::resource('delivery-zones', AdminDeliveryZoneController::class)->except(['show']);
+    Route::get('reports/{period}', [AdminReportController::class, 'orders'])->whereIn('period', ['day', 'week', 'month', 'year'])->name('reports.orders');
+    Route::get('reports/{period}/pdf', [AdminReportController::class, 'ordersPdf'])->whereIn('period', ['day', 'week', 'month', 'year'])->name('reports.orders.pdf');
 });

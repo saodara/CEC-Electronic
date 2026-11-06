@@ -5,6 +5,7 @@ namespace Tests\Feature\Customer;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 // Note: Order does not use the HasFactory trait, so Order::factory() is
@@ -33,6 +34,54 @@ class AccountControllerTest extends TestCase
 
         $this->get(route('account.orders.show', $order))
             ->assertRedirect(route('customer.login'));
+    }
+
+    #[DataProvider('statusMeaningProvider')]
+    public function test_order_explains_what_its_status_means(array $attributes, string $meaning): void
+    {
+        $this->assertSame($meaning, Order::factory()->make($attributes)->statusMeaning());
+    }
+
+    public static function statusMeaningProvider(): array
+    {
+        return [
+            'pending bakong unpaid' => [
+                ['status' => 'pending', 'payment_status' => 'unpaid', 'payment_method' => 'bakong'],
+                'Waiting for your payment.',
+            ],
+            'pending cash on delivery' => [
+                ['status' => 'pending', 'payment_status' => 'unpaid', 'payment_method' => 'cash_on_delivery'],
+                "We got your order and will confirm it soon. You'll pay on delivery.",
+            ],
+            'pending paid' => [
+                ['status' => 'pending', 'payment_status' => 'paid'],
+                "Payment received. We'll start preparing your order soon.",
+            ],
+            'pending payment failed' => [
+                ['status' => 'pending', 'payment_status' => 'failed'],
+                "Your payment didn't go through. Please call 012 220 152 for help.",
+            ],
+            'processing' => [['status' => 'processing'], "We're preparing your order."],
+            'shipped' => [['status' => 'shipped'], 'Your order is on the way.'],
+            'completed' => [['status' => 'completed'], 'Your order is finished. Thank you for shopping with us!'],
+            'cancelled' => [['status' => 'cancelled'], 'This order was cancelled.'],
+            'refunded overrides status' => [
+                ['status' => 'cancelled', 'payment_status' => 'refunded'],
+                'This order was cancelled and your payment refunded.',
+            ],
+            'unknown status' => [['status' => 'on_hold'], ''],
+        ];
+    }
+
+    public function test_status_meaning_is_shown_on_customer_order_pages(): void
+    {
+        $user = User::factory()->create();
+        $order = Order::factory()->create(['user_id' => $user->id, 'status' => 'completed']);
+        $meaning = 'Your order is finished. Thank you for shopping with us!';
+
+        $this->actingAs($user)->get(route('account.dashboard'))->assertSee($meaning);
+        $this->actingAs($user)->get(route('account.orders'))->assertSee($meaning);
+        $this->actingAs($user)->get(route('account.orders.show', $order))->assertSee($meaning);
     }
 
     public function test_authenticated_user_sees_own_orders_on_dashboard(): void

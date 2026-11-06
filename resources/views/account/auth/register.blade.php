@@ -9,7 +9,7 @@
             <p>Register once and keep your order history, delivery details, and warranty support records connected to your email.</p>
             <div class="service-row" style="grid-template-columns:1fr 1fr;margin-top:22px">
                 <div class="service" style="background:rgba(255,255,255,.1);border-radius:8px"><span class="service-icon">DL</span><span><strong style="color:#fff">Delivery</strong><span style="color:#d9e7f7">Track status.</span></span></div>
-                <div class="service" style="background:rgba(255,255,255,.1);border-radius:8px"><span class="service-icon">SP</span><span><strong style="color:#fff">Support</strong><span style="color:#d9e7f7">Faster help.</span></span></div>
+                <a class="service" href="https://t.me/CECELECTRONICS" target="_blank" rel="noopener" style="background:rgba(255,255,255,.1);border-radius:8px"><span class="service-icon">SP</span><span><strong style="color:#fff">Support</strong><span style="color:#d9e7f7">Chat on Telegram.</span></span></a>
             </div>
         </div>
 
