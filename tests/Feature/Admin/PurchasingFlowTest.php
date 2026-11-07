@@ -61,6 +61,61 @@ class PurchasingFlowTest extends TestCase
         $this->assertSame('paid', $bill->fresh()->status);
     }
 
+    private function billFor(int $quantity = 5, float $unitCost = 10.5): Bill
+    {
+        $order = $this->draft(Product::factory()->create(['name' => 'Huawei AP371']), $quantity, $unitCost);
+        $this->post(route('admin.purchase-orders.order', $order))->assertSessionHasNoErrors();
+        $this->post(route('admin.purchase-orders.receive', $order))->assertSessionHasNoErrors();
+        $this->post(route('admin.purchase-orders.bill', $order))->assertRedirect();
+
+        return Bill::latest('id')->firstOrFail();
+    }
+
+    public function test_paid_bill_has_a_receipt_to_download(): void
+    {
+        $this->actingAsAdmin();
+        $bill = $this->billFor();
+        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06'])->assertSessionHasNoErrors();
+
+        $receiptUrl = route('admin.bills.receipt', $bill);
+        $this->get(route('admin.bills.show', $bill))->assertSee($receiptUrl);
+        $this->get(route('admin.bills.index'))->assertSee($receiptUrl);
+
+        $pdf = $this->get($receiptUrl)->assertOk()->assertDownload('Receipt-'.$bill->bill_number.'.pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $bill->refresh()->load(['supplier', 'purchaseOrder.items.product']);
+        $html = view('admin.bills.receipt', compact('bill'))->render();
+        foreach (['PAYMENT RECEIPT', $bill->bill_number, $bill->supplier->name, '06 Nov 2026', 'Huawei AP371', '$52.50'] as $text) {
+            $this->assertStringContainsString($text, $html);
+        }
+    }
+
+    public function test_unpaid_bill_has_no_receipt(): void
+    {
+        $this->actingAsAdmin();
+        $bill = $this->billFor();
+        $receiptUrl = route('admin.bills.receipt', $bill);
+
+        $this->get(route('admin.bills.show', $bill))->assertDontSee($receiptUrl);
+        $this->get(route('admin.bills.index'))->assertDontSee($receiptUrl);
+        $this->get($receiptUrl)->assertRedirect(route('admin.bills.show', $bill))->assertSessionHasErrors('bill');
+
+        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06']);
+        $this->post(route('admin.bills.unpay', $bill));
+        $this->get($receiptUrl)->assertRedirect(route('admin.bills.show', $bill));
+    }
+
+    public function test_guest_cannot_download_a_receipt(): void
+    {
+        $this->actingAsAdmin();
+        $bill = $this->billFor();
+        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06']);
+        auth()->logout();
+
+        $this->get(route('admin.bills.receipt', $bill))->assertRedirect(route('admin.login'));
+    }
+
     public function test_receiving_twice_only_adds_stock_once(): void
     {
         $this->actingAsAdmin();

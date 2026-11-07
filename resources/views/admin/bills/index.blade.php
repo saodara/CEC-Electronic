@@ -24,7 +24,7 @@
                         <td>{{ $bill->due_date->format('d M Y') }}</td>
                         <td>@include('admin.bills._status')</td>
                         <td>${{ number_format($bill->total, 2) }}</td>
-                        <td><div class="actions"><a class="btn secondary" href="{{ route('admin.bills.show', $bill) }}">Open</a></div></td>
+                        <td><div class="actions">@if($bill->status === 'paid')<a class="btn secondary" href="{{ route('admin.bills.receipt', $bill) }}" download>Receipt</a>@endif<a class="btn secondary" href="{{ route('admin.bills.show', $bill) }}">Open</a></div></td>
                     </tr>
                 @empty
                     <tr><td colspan="7" class="muted">No bills yet.</td></tr>

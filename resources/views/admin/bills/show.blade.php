@@ -11,6 +11,7 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
             @if($bill->status === 'paid')
+                <a class="btn" href="{{ route('admin.bills.receipt', $bill) }}" download>Download receipt</a>
                 <form action="{{ route('admin.bills.unpay', $bill) }}" method="post">@csrf<button class="btn secondary" type="submit">Mark as unpaid</button></form>
             @else
                 <form action="{{ route('admin.bills.destroy', $bill) }}" method="post" onsubmit="return confirm('Delete this bill?')">@csrf @method('DELETE')<button class="btn danger" type="submit">Delete</button></form>

@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Bill;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class BillController extends Controller
@@ -50,6 +52,20 @@ class BillController extends Controller
         $bill->update(['status' => 'unpaid', 'paid_on' => null]);
 
         return back()->with('status', 'Bill marked as unpaid.');
+    }
+
+    public function receipt(Bill $bill): Response|RedirectResponse
+    {
+        if ($bill->status !== 'paid') {
+            return redirect()->route('admin.bills.show', $bill)
+                ->withErrors(['bill' => 'A receipt is only available after the bill is paid.']);
+        }
+
+        $bill->load(['supplier', 'purchaseOrder.items.product']);
+
+        return Pdf::loadView('admin.bills.receipt', compact('bill'))
+            ->setPaper('a4')
+            ->download('Receipt-'.$bill->bill_number.'.pdf');
     }
 
     public function destroy(Bill $bill): RedirectResponse

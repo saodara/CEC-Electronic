@@ -106,6 +106,7 @@ Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAd
     Route::resource('bills', AdminBillController::class)->only(['index', 'show', 'update', 'destroy']);
     Route::post('bills/{bill}/pay', [AdminBillController::class, 'markPaid'])->name('bills.pay');
     Route::post('bills/{bill}/unpay', [AdminBillController::class, 'markUnpaid'])->name('bills.unpay');
+    Route::get('bills/{bill}/receipt', [AdminBillController::class, 'receipt'])->name('bills.receipt');
     Route::get('invoices', [AdminInvoiceController::class, 'index'])->name('invoices.index');
     Route::post('orders/{order}/invoice', [AdminInvoiceController::class, 'store'])->name('invoices.store');
     Route::get('invoices/{invoice}', [AdminInvoiceController::class, 'show'])->name('invoices.show');
