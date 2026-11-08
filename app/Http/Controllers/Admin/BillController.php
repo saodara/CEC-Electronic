@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Bill;
+use App\Models\Order;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,12 +13,23 @@ use Illuminate\View\View;
 
 class BillController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        if ($request->query('tab') === 'customers') {
+            $orders = Order::query()
+                ->with('items')
+                ->where('status', '!=', 'cancelled')
+                ->latest()
+                ->paginate(10)
+                ->withQueryString();
+
+            return view('admin.bills.index', ['tab' => 'customers', 'orders' => $orders]);
+        }
+
         $bills = Bill::query()->with(['supplier', 'purchaseOrder'])->latest()->paginate(10);
         $unpaidTotal = (float) Bill::query()->where('status', 'unpaid')->sum('total');
 
-        return view('admin.bills.index', compact('bills', 'unpaidTotal'));
+        return view('admin.bills.index', ['tab' => 'suppliers', 'bills' => $bills, 'unpaidTotal' => $unpaidTotal]);
     }
 
     public function show(Bill $bill): View

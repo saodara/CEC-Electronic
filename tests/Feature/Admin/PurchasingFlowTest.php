@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Bill;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
@@ -104,6 +105,32 @@ class PurchasingFlowTest extends TestCase
         $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06']);
         $this->post(route('admin.bills.unpay', $bill));
         $this->get($receiptUrl)->assertRedirect(route('admin.bills.show', $bill));
+    }
+
+    public function test_customer_bills_tab_shows_what_each_customer_bought(): void
+    {
+        $this->actingAsAdmin();
+        $order = Order::factory()->create(['customer_name' => 'Sok Dara', 'customer_phone' => '012345678', 'payment_status' => 'paid', 'grand_total' => 11]);
+        $order->items()->create(['product_name' => 'Huawei AP371', 'quantity' => 1, 'unit_price' => 1, 'line_total' => 1]);
+        $order->items()->create(['product_name' => 'Wireless Mouse', 'quantity' => 2, 'unit_price' => 5, 'line_total' => 10]);
+        Order::factory()->create(['customer_name' => 'Cancelled Customer', 'status' => 'cancelled']);
+
+        $this->get(route('admin.bills.index', ['tab' => 'customers']))
+            ->assertOk()
+            ->assertSee('Customer bills')
+            ->assertSee('Sok Dara')
+            ->assertSee('012345678')
+            ->assertSee('Huawei AP371')
+            ->assertSee('Wireless Mouse')
+            ->assertSee('2 @ $5.00 = $10.00', false)
+            ->assertSee('$11.00')
+            ->assertSee('Paid')
+            ->assertSee(route('admin.orders.receipt', $order))
+            ->assertDontSee('Cancelled Customer')
+            ->assertDontSee('Unpaid: $');
+
+        $this->get(route('admin.orders.receipt', $order))->assertOk();
+        $this->get(route('admin.bills.index'))->assertOk()->assertSee('Unpaid: $')->assertDontSee('Sok Dara');
     }
 
     public function test_guest_cannot_download_a_receipt(): void
