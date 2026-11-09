@@ -23,7 +23,27 @@ class BillController extends Controller
                 ->paginate(10)
                 ->withQueryString();
 
-            return view('admin.bills.index', ['tab' => 'customers', 'orders' => $orders]);
+            $active = Order::query()->where('status', '!=', 'cancelled');
+            $paidTotal = (float) (clone $active)->where('payment_status', 'paid')->sum('grand_total');
+            $unpaidCustomerTotal = (float) (clone $active)->where('payment_status', 'unpaid')->sum('grand_total');
+
+            $userIds = $orders->pluck('user_id')->filter()->unique();
+            $phones = $orders->whereNull('user_id')->pluck('customer_phone')->filter()->unique();
+            $spentByUser = $userIds->isEmpty() ? collect() : (clone $active)->where('payment_status', 'paid')
+                ->whereIn('user_id', $userIds)->groupBy('user_id')
+                ->selectRaw('user_id, SUM(grand_total) as spent')->pluck('spent', 'user_id');
+            $spentByPhone = $phones->isEmpty() ? collect() : (clone $active)->where('payment_status', 'paid')
+                ->whereNull('user_id')->whereIn('customer_phone', $phones)->groupBy('customer_phone')
+                ->selectRaw('customer_phone, SUM(grand_total) as spent')->pluck('spent', 'customer_phone');
+
+            return view('admin.bills.index', [
+                'tab' => 'customers',
+                'orders' => $orders,
+                'paidTotal' => $paidTotal,
+                'unpaidCustomerTotal' => $unpaidCustomerTotal,
+                'spentByUser' => $spentByUser,
+                'spentByPhone' => $spentByPhone,
+            ]);
         }
 
         $bills = Bill::query()->with(['supplier', 'purchaseOrder'])->latest()->paginate(10);

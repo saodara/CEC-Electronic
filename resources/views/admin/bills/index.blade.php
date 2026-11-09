@@ -15,6 +15,10 @@
                 <h2 style="margin:0">Customer bills</h2>
                 <p class="muted" style="margin:6px 0 0">What each customer bought, what they paid, and their receipt. Cancelled orders are not shown.</p>
             </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <span class="status">Total paid: ${{ number_format($paidTotal, 2) }}</span>
+                <span class="status warning">Waiting for payment: ${{ number_format($unpaidCustomerTotal, 2) }}</span>
+            </div>
         </div>
 
         <div class="panel" style="overflow:hidden">
@@ -23,7 +27,7 @@
                 <tbody>
                     @forelse($orders as $order)
                         <tr>
-                            <td><strong>{{ $order->customer_name }}</strong><div class="muted">{{ $order->customer_phone }}</div><div class="muted">{{ $order->order_number }} &middot; {{ $order->created_at->copy()->setTimezone(config('app.shop_timezone'))->format('d M Y') }}</div></td>
+                            <td><strong>{{ $order->customer_name }}</strong><div class="muted">{{ $order->customer_phone }}</div><div class="muted">{{ $order->order_number }} &middot; {{ $order->created_at->copy()->setTimezone(config('app.shop_timezone'))->format('d M Y') }}</div>@php($customerSpent = (float) ($order->user_id ? ($spentByUser[$order->user_id] ?? 0) : ($spentByPhone[$order->customer_phone] ?? 0)))<div class="muted">Customer total spent: <strong>${{ number_format($customerSpent, 2) }}</strong></div></td>
                             <td>
                                 @foreach($order->items as $item)
                                     <div>{{ $item->product_name }} <span class="muted">&times; {{ number_format($item->quantity) }} @ ${{ number_format($item->unit_price, 2) }} = ${{ number_format($item->line_total, 2) }}</span></div>

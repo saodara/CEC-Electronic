@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Bill;
 use App\Models\Order;
+use App\Models\User;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
@@ -131,6 +132,24 @@ class PurchasingFlowTest extends TestCase
 
         $this->get(route('admin.orders.receipt', $order))->assertOk();
         $this->get(route('admin.bills.index'))->assertOk()->assertSee('Unpaid: $')->assertDontSee('Sok Dara');
+    }
+
+    public function test_customer_bills_tab_shows_totals_for_each_customer(): void
+    {
+        $this->actingAsAdmin();
+        $buyer = User::factory()->create();
+        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'payment_status' => 'paid', 'grand_total' => 100]);
+        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'payment_status' => 'paid', 'grand_total' => 50.5]);
+        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'payment_status' => 'unpaid', 'grand_total' => 20]);
+        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'status' => 'cancelled', 'payment_status' => 'paid', 'grand_total' => 999]);
+        Order::factory()->create(['user_id' => null, 'customer_name' => 'Guest Buyer', 'customer_phone' => '099111222', 'payment_status' => 'paid', 'grand_total' => 30]);
+
+        $this->get(route('admin.bills.index', ['tab' => 'customers']))
+            ->assertOk()
+            ->assertSee('Total paid: $180.50', false)
+            ->assertSee('Waiting for payment: $20.00', false)
+            ->assertSee('Customer total spent: <strong>$150.50</strong>', false)
+            ->assertSee('Customer total spent: <strong>$30.00</strong>', false);
     }
 
     public function test_guest_cannot_download_a_receipt(): void
