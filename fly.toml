@@ -29,5 +29,11 @@ console_command = 'php /var/www/html/artisan tinker'
   min_machines_running = 1
   processes = ['app']
 
+# Uploaded images (product, category and brand pictures) live on this volume so
+# they survive deploys. Without it every deploy starts with an empty folder.
+[mounts]
+  source = 'cec_storage'
+  destination = '/var/www/html/storage/app/public'
+
 [[vm]]
   size = 'shared-cpu-1x'
