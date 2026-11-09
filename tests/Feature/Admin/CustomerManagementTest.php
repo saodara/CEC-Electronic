@@ -53,6 +53,43 @@ class CustomerManagementTest extends TestCase
         $this->assertCount(2, $customers);
     }
 
+    public function test_customer_list_shows_every_customer_but_no_admins(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $admin->update(['phone' => '011111111']);
+        $otherAdmin = User::factory()->admin()->create(['email' => 'boss@cec.test']);
+
+        $registeredNoOrders = User::factory()->create(['name' => 'Sok Dara', 'phone' => '012000111']);
+        $registeredWithOrders = User::factory()->create(['name' => 'Chan Lina', 'phone' => '012000222']);
+        Order::factory()->create(['user_id' => $registeredWithOrders->id, 'customer_name' => 'Chan Lina', 'customer_phone' => '012000222', 'grand_total' => 40]);
+        Order::factory()->create(['customer_name' => 'Guest Buyer', 'customer_phone' => '012000333', 'grand_total' => 25]);
+
+        Order::factory()->create(['user_id' => $admin->id, 'customer_name' => 'Admin By Account', 'customer_phone' => '099000001']);
+        Order::factory()->create(['customer_name' => 'Admin By Phone', 'customer_phone' => '011111111']);
+        Order::factory()->create(['customer_name' => 'Admin By Email', 'customer_phone' => '099000003', 'customer_email' => 'Boss@CEC.test']);
+
+        $response = $this->get(route('admin.customers.index'))->assertOk();
+
+        $names = collect($response->viewData('customers')->items())->pluck('customer_name')->sort()->values()->all();
+        $this->assertSame(['Chan Lina', 'Guest Buyer', 'Sok Dara'], $names);
+        $response->assertSee('No orders yet')->assertSee('Registered')->assertSee('Guest')
+            ->assertDontSee('Admin By Account')->assertDontSee('Admin By Phone')->assertDontSee('Admin By Email')
+            ->assertDontSee($otherAdmin->email);
+
+        $this->get(route('admin.customers.show', '011111111'))->assertNotFound();
+        $this->get(route('admin.customers.show', '099000001'))->assertNotFound();
+        $this->get(route('admin.customers.show', '012000333'))->assertOk();
+    }
+
+    public function test_customer_list_pages_ten_at_a_time(): void
+    {
+        $this->actingAsAdmin();
+        User::factory()->count(12)->create();
+
+        $this->assertCount(10, $this->get(route('admin.customers.index'))->viewData('customers')->items());
+        $this->assertCount(2, $this->get(route('admin.customers.index', ['page' => 2]))->viewData('customers')->items());
+    }
+
     public function test_guest_is_redirected_to_login_when_visiting_customer_show(): void
     {
         $order = Order::factory()->create(['customer_phone' => '012345678']);
