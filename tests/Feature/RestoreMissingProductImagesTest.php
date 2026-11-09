@@ -50,7 +50,7 @@ class RestoreMissingProductImagesTest extends TestCase
     {
         $files = glob(public_path('images/products-restored/*.jpg'));
 
-        $this->assertCount(61, $files);
+        $this->assertCount(71, $files);
         foreach ($files as $file) {
             $this->assertMatchesRegularExpression('/^[a-z0-9-]+$/', basename($file, '.jpg'));
             $this->assertLessThan(300 * 1024, filesize($file), basename($file).' is too large');
