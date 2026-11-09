@@ -16,9 +16,26 @@ class BillController extends Controller
     public function index(Request $request): View
     {
         if ($request->query('tab') === 'customers') {
+            $filters = [
+                'q' => trim((string) $request->query('q', '')),
+                'payment' => in_array($request->query('payment'), ['paid', 'unpaid'], true) ? $request->query('payment') : '',
+                'from' => $this->dateFilter($request->query('from')),
+                'to' => $this->dateFilter($request->query('to')),
+            ];
+            $timezone = config('app.shop_timezone');
+
             $orders = Order::query()
-                ->with('items')
+                ->with(['items', 'invoice'])
                 ->where('status', '!=', 'cancelled')
+                ->when($filters['q'] !== '', function ($query) use ($filters) {
+                    $term = '%'.mb_strtolower($filters['q']).'%';
+                    $query->where(fn ($q) => $q->whereRaw('LOWER(customer_name) LIKE ?', [$term])
+                        ->orWhereRaw('LOWER(order_number) LIKE ?', [$term])
+                        ->orWhere('customer_phone', 'like', '%'.$filters['q'].'%'));
+                })
+                ->when($filters['payment'] !== '', fn ($query) => $query->where('payment_status', $filters['payment']))
+                ->when($filters['from'], fn ($query) => $query->where('created_at', '>=', \Illuminate\Support\Carbon::parse($filters['from'], $timezone)->startOfDay()->utc()))
+                ->when($filters['to'], fn ($query) => $query->where('created_at', '<=', \Illuminate\Support\Carbon::parse($filters['to'], $timezone)->endOfDay()->utc()))
                 ->latest()
                 ->paginate(10)
                 ->withQueryString();
@@ -39,6 +56,7 @@ class BillController extends Controller
             return view('admin.bills.index', [
                 'tab' => 'customers',
                 'orders' => $orders,
+                'filters' => $filters,
                 'paidTotal' => $paidTotal,
                 'unpaidCustomerTotal' => $unpaidCustomerTotal,
                 'spentByUser' => $spentByUser,
@@ -109,5 +127,10 @@ class BillController extends Controller
         $bill->delete();
 
         return redirect()->route('admin.bills.index')->with('status', 'Bill deleted.');
+    }
+
+    private function dateFilter(mixed $value): string
+    {
+        return is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
     }
 }

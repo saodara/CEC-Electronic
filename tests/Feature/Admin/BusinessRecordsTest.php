@@ -34,6 +34,32 @@ class BusinessRecordsTest extends TestCase
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
     }
 
+    public function test_invoice_shows_ship_to_discount_and_balance_due(): void
+    {
+        $this->actingAsAdmin();
+        $order = Order::factory()->create([
+            'payment_status' => 'unpaid', 'subtotal' => 100, 'shipping_total' => 5, 'discount_total' => 10, 'grand_total' => 95,
+            'shipping_address' => ['address_line_1' => 'Street 271', 'city' => 'Phnom Penh', 'country' => 'Cambodia'],
+        ]);
+        $this->post(route('admin.invoices.store', $order));
+        $invoice = Invoice::firstOrFail();
+
+        $this->get(route('admin.invoices.show', $invoice))->assertOk()
+            ->assertSee('Unpaid')->assertSee('Ship to')->assertSee('Street 271')
+            ->assertSee('-$10.00', false)->assertSee('Balance due')->assertSee('$95.00')
+            ->assertDontSee(route('admin.orders.receipt', $order));
+
+        $view = $this->get(route('admin.invoices.pdf', [$invoice, 'view' => 1]))->assertOk();
+        $this->assertStringStartsWith('%PDF', $view->getContent());
+        $this->assertStringContainsString('inline', (string) $view->headers->get('content-disposition'));
+
+        $order->update(['payment_status' => 'paid', 'payment_confirmed_at' => now()]);
+        $this->get(route('admin.invoices.show', $invoice))->assertSee('Paid')->assertSee(route('admin.orders.receipt', $order));
+        $html = view('admin.invoices.pdf', ['invoice' => $invoice->fresh()->load('order.items')])->render();
+        $this->assertStringContainsString('PAID', $html);
+        $this->assertStringContainsString('Paid in full', $html);
+    }
+
     public function test_cancelled_order_cannot_get_an_invoice(): void
     {
         $this->actingAsAdmin();

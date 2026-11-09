@@ -152,6 +152,40 @@ class PurchasingFlowTest extends TestCase
             ->assertSee('Customer total spent: <strong>$30.00</strong>', false);
     }
 
+    public function test_customer_bills_can_be_searched_and_filtered(): void
+    {
+        $this->actingAsAdmin();
+        Order::factory()->create(['customer_name' => 'Sok Dara', 'customer_phone' => '012345678', 'payment_status' => 'paid', 'created_at' => '2026-10-05 05:00:00']);
+        Order::factory()->create(['customer_name' => 'Keo Lina', 'customer_phone' => '098765432', 'payment_status' => 'unpaid', 'created_at' => '2026-11-05 05:00:00']);
+
+        $url = fn (array $query) => route('admin.bills.index', ['tab' => 'customers'] + $query);
+
+        $this->get($url(['q' => 'sok']))->assertOk()->assertSee('Sok Dara')->assertDontSee('Keo Lina');
+        $this->get($url(['q' => '0987']))->assertSee('Keo Lina')->assertDontSee('Sok Dara');
+        $this->get($url(['payment' => 'unpaid']))->assertSee('Keo Lina')->assertDontSee('Sok Dara');
+        $this->get($url(['from' => '2026-11-01', 'to' => '2026-11-30']))->assertSee('Keo Lina')->assertDontSee('Sok Dara');
+        $this->get($url(['q' => 'nobody']))->assertSee('No customer bills match this filter.');
+        $this->get($url(['from' => 'not-a-date']))->assertOk()->assertSee('Sok Dara')->assertSee('Keo Lina');
+    }
+
+    public function test_unpaid_customer_bill_offers_an_invoice_but_no_receipt(): void
+    {
+        $this->actingAsAdmin();
+        $order = Order::factory()->create(['customer_name' => 'Keo Lina', 'payment_status' => 'unpaid', 'grand_total' => 40]);
+
+        $this->get(route('admin.bills.index', ['tab' => 'customers']))
+            ->assertSee('Make invoice')
+            ->assertSee(route('admin.invoices.store', $order))
+            ->assertDontSee(route('admin.orders.receipt', $order));
+
+        $this->post(route('admin.invoices.store', $order))->assertRedirect();
+        $invoice = $order->fresh()->invoice;
+
+        $this->get(route('admin.bills.index', ['tab' => 'customers']))
+            ->assertSee(route('admin.invoices.show', $invoice))
+            ->assertDontSee('Make invoice');
+    }
+
     public function test_guest_cannot_download_a_receipt(): void
     {
         $this->actingAsAdmin();

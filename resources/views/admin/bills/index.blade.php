@@ -13,13 +13,28 @@
         <div class="toolbar" style="flex-wrap:wrap">
             <div>
                 <h2 style="margin:0">Customer bills</h2>
-                <p class="muted" style="margin:6px 0 0">What each customer bought, what they paid, and their receipt. Cancelled orders are not shown.</p>
+                <p class="muted" style="margin:6px 0 0">What each customer bought, what they paid, their invoice and receipt. Cancelled orders are not shown.</p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <span class="status">Total paid: ${{ number_format($paidTotal, 2) }}</span>
                 <span class="status warning">Waiting for payment: ${{ number_format($unpaidCustomerTotal, 2) }}</span>
             </div>
         </div>
+
+        <form method="GET" action="{{ route('admin.bills.index') }}" class="panel" style="padding:14px;margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end">
+            <input type="hidden" name="tab" value="customers">
+            <label class="field" style="grid-column:span 2">Search<input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Customer name, phone or order no."></label>
+            <label class="field">Payment
+                <select name="payment">
+                    <option value="">All</option>
+                    <option value="paid" @selected($filters['payment'] === 'paid')>Paid</option>
+                    <option value="unpaid" @selected($filters['payment'] === 'unpaid')>Unpaid</option>
+                </select>
+            </label>
+            <label class="field">From<input type="date" name="from" value="{{ $filters['from'] }}"></label>
+            <label class="field">To<input type="date" name="to" value="{{ $filters['to'] }}"></label>
+            <div style="display:flex;gap:8px"><button class="btn" type="submit">Filter</button>@if(array_filter($filters))<a class="btn secondary" href="{{ route('admin.bills.index', ['tab' => 'customers']) }}">Clear</a>@endif</div>
+        </form>
 
         <div class="panel" style="overflow:hidden">
             <table>
@@ -35,10 +50,10 @@
                             </td>
                             <td><span class="status-text {{ $order->payment_status === 'paid' ? 'success' : 'danger' }}">{{ ucfirst($order->payment_status) }}</span></td>
                             <td><strong>${{ number_format($order->grand_total, 2) }}</strong></td>
-                            <td><div class="actions"><a class="btn secondary" href="{{ route('admin.orders.receipt', $order) }}" download>Receipt</a><a class="btn secondary" href="{{ route('admin.orders.show', $order) }}">Open</a></div></td>
+                            <td><div class="actions">@if($order->invoice)<a class="btn" href="{{ route('admin.invoices.show', $order->invoice) }}">Invoice</a>@else<form method="POST" action="{{ route('admin.invoices.store', $order) }}" style="display:inline">@csrf<button class="btn" type="submit">Make invoice</button></form>@endif @if($order->payment_status === 'paid')<a class="btn secondary" href="{{ route('admin.orders.receipt', $order) }}" download>Receipt</a>@endif<a class="btn secondary" href="{{ route('admin.orders.show', $order) }}">Open</a></div></td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="muted">No customer bills yet.</td></tr>
+                        <tr><td colspan="5" class="muted">{{ array_filter($filters) ? 'No customer bills match this filter.' : 'No customer bills yet.' }}</td></tr>
                     @endforelse
                 </tbody>
             </table>

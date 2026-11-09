@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\View\View;
 
@@ -35,18 +36,20 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice): View
     {
-        $invoice->load('order.items');
+        $invoice->load(['order.items', 'order.deliveryProvider']);
 
         return view('admin.invoices.show', compact('invoice'));
     }
 
-    public function pdf(Invoice $invoice): Response
+    public function pdf(Request $request, Invoice $invoice): Response
     {
-        $invoice->load('order.items');
+        $invoice->load(['order.items', 'order.deliveryProvider']);
 
-        return Pdf::loadView('admin.invoices.pdf', compact('invoice'))
-            ->setPaper('a4')
-            ->download($invoice->invoice_number.'.pdf');
+        $pdf = Pdf::loadView('admin.invoices.pdf', compact('invoice'))->setPaper('a4');
+
+        return $request->boolean('view')
+            ? $pdf->stream($invoice->invoice_number.'.pdf')
+            : $pdf->download($invoice->invoice_number.'.pdf');
     }
 
     private function invoiceNumber(): string
