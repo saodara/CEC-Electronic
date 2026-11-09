@@ -36,6 +36,33 @@ class AccountControllerTest extends TestCase
             ->assertRedirect(route('customer.login'));
     }
 
+    public function test_account_shows_how_much_the_customer_has_spent(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        Order::factory()->create(['user_id' => $user->id, 'status' => 'completed', 'payment_status' => 'paid', 'grand_total' => 120]);
+        Order::factory()->create(['user_id' => $user->id, 'status' => 'processing', 'payment_status' => 'paid', 'grand_total' => 30.5]);
+        Order::factory()->create(['user_id' => $user->id, 'status' => 'pending', 'payment_status' => 'unpaid', 'grand_total' => 45]);
+        Order::factory()->create(['user_id' => $user->id, 'status' => 'cancelled', 'payment_status' => 'unpaid', 'grand_total' => 999]);
+        Order::factory()->create(['user_id' => $other->id, 'status' => 'completed', 'payment_status' => 'paid', 'grand_total' => 500]);
+
+        $this->actingAs($user);
+
+        foreach ([route('account.dashboard'), route('account.orders')] as $url) {
+            $response = $this->get($url)->assertOk();
+            $this->assertSame(['paid' => 150.5, 'orders' => 3, 'unpaid' => 45.0], $response->viewData('spending'));
+            $response->assertSee('Total spent')->assertSee('$150.50')->assertSee('Waiting for payment')->assertSee('$45.00');
+        }
+    }
+
+    public function test_new_customer_sees_zero_spent_and_no_unpaid_line(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->get(route('account.dashboard'))->assertOk()
+            ->assertSee('$0.00')->assertSee('0 orders placed.')->assertDontSee('Waiting for payment');
+    }
+
     #[DataProvider('statusMeaningProvider')]
     public function test_order_explains_what_its_status_means(array $attributes, string $meaning): void
     {

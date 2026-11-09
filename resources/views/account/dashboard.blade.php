@@ -21,8 +21,10 @@
         </span>
     </div>
 
+    @include('account._spending')
+
     <section class="service-row">
-        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/order-icon.png') }}" alt="Orders"></span><span><strong>Orders</strong><span>{{ $orders->count() }} recent orders found.</span></span></div>
+        <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/order-icon.png') }}" alt="Orders"></span><span><strong>Orders</strong><span>{{ number_format($spending['orders']) }} {{ $spending['orders'] === 1 ? 'order' : 'orders' }} placed.</span></span></div>
         <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/delivery-icon.png') }}" alt="Delivery"></span><span><strong>Delivery</strong><span>Track assigned delivery provider and status.</span></span></div>
         <div class="panel service"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/warranty-icon.jpeg') }}" alt="Warranty"></span><span><strong>Warranty</strong><span>Keep order numbers for service support.</span></span></div>
         <a class="panel service" href="https://t.me/CECELECTRONICS" target="_blank" rel="noopener"><span class="service-icon"><img src="{{ asset('images/ProfileAndOrder/support-icon.avif') }}" alt="Support"></span><span><strong>Support</strong><span>Telegram @@CECELECTRONICS or call 012 220 152.</span></span></a>

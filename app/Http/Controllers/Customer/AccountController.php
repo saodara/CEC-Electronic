@@ -23,8 +23,9 @@ class AccountController extends Controller
             ->latest()
             ->take(10)
             ->get();
+        $spending = $this->spending($request->user()->id);
 
-        return view('account.dashboard', compact('orders'));
+        return view('account.dashboard', compact('orders', 'spending'));
     }
 
     public function orders(Request $request): View|RedirectResponse
@@ -37,8 +38,9 @@ class AccountController extends Controller
             ->when($request->user(), fn ($query) => $query->where('user_id', $request->user()->id))
             ->latest()
             ->paginate(10);
+        $spending = $this->spending($request->user()->id);
 
-        return view('account.orders', compact('orders'));
+        return view('account.orders', compact('orders', 'spending'));
     }
 
     public function show(Request $request, Order $order): View|RedirectResponse
@@ -76,5 +78,23 @@ class AccountController extends Controller
         abort_unless($order->user_id === $request->user()->id, 403);
 
         return $receipts->stream($order);
+    }
+
+    /**
+     * What this customer has bought: paid total, order count and anything
+     * still waiting for payment. Cancelled orders are not counted.
+     */
+    private function spending(int $userId): array
+    {
+        $orders = Order::query()
+            ->where('user_id', $userId)
+            ->where('status', '!=', 'cancelled')
+            ->get(['grand_total', 'payment_status']);
+
+        return [
+            'paid' => (float) $orders->where('payment_status', 'paid')->sum('grand_total'),
+            'orders' => $orders->count(),
+            'unpaid' => (float) $orders->where('payment_status', 'unpaid')->sum('grand_total'),
+        ];
     }
 }

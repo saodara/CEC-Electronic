@@ -8,6 +8,8 @@
         <a class="btn secondary" href="{{ route('account.dashboard') }}">Account</a>
     </div>
 
+    @include('account._spending')
+
     <div class="panel" style="padding:18px">
         @forelse($orders as $order)
             <div style="border-bottom:1px solid var(--line);padding:14px 0">
