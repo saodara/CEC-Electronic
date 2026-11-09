@@ -87,7 +87,7 @@ class PurchasingFlowTest extends TestCase
 
         $bill->refresh()->load(['supplier', 'purchaseOrder.items.product']);
         $html = view('admin.bills.receipt', compact('bill'))->render();
-        foreach (['PAYMENT RECEIPT', $bill->bill_number, $bill->supplier->name, '06 Nov 2026', 'Huawei AP371', '$52.50'] as $text) {
+        foreach (['PAYMENT RECEIPT', $bill->bill_number, e($bill->supplier->name), '06 Nov 2026', 'Huawei AP371', '$52.50'] as $text) {
             $this->assertStringContainsString($text, $html);
         }
     }

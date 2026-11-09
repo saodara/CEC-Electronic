@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Product extends Model
@@ -104,6 +105,11 @@ class Product extends Model
         // asset() (not Storage::disk('public')->url()) so this resolves against
         // the actual request host, matching how the rest of the app derives URLs
         // instead of depending on APP_URL (see commit a6d3a8b).
+        // A missing upload shows the placeholder instead of a broken image.
+        if (! Storage::disk('public')->exists($this->image)) {
+            return asset('images/product-placeholder.svg');
+        }
+
         return asset('storage/' . $this->image);
     }
 }
