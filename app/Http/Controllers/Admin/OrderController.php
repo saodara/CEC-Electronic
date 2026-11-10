@@ -21,6 +21,7 @@ class OrderController extends Controller
         $orders = Order::query()
             ->with(['deliveryProvider', 'deliveryZone'])
             ->withCount('items')
+            ->where('payment_status', 'paid')
             ->latest()
             ->paginate(10);
         $paymentNotificationsCount = Order::query()

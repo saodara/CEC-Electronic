@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Admin\BillController as AdminBillController;
 use App\Http\Controllers\Admin\BrandController as AdminBrandController;
 use App\Http\Controllers\Admin\ExpenseController as AdminExpenseController;
 use App\Http\Controllers\Admin\InvoiceController as AdminInvoiceController;
@@ -102,11 +101,6 @@ Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAd
     Route::post('purchase-orders/{purchase_order}/order', [AdminPurchaseOrderController::class, 'markOrdered'])->name('purchase-orders.order');
     Route::post('purchase-orders/{purchase_order}/receive', [AdminPurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchase_order}/cancel', [AdminPurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
-    Route::post('purchase-orders/{purchase_order}/bill', [AdminPurchaseOrderController::class, 'createBill'])->name('purchase-orders.bill');
-    Route::resource('bills', AdminBillController::class)->only(['index', 'show', 'update', 'destroy']);
-    Route::post('bills/{bill}/pay', [AdminBillController::class, 'markPaid'])->name('bills.pay');
-    Route::post('bills/{bill}/unpay', [AdminBillController::class, 'markUnpaid'])->name('bills.unpay');
-    Route::get('bills/{bill}/receipt', [AdminBillController::class, 'receipt'])->name('bills.receipt');
     Route::get('invoices', [AdminInvoiceController::class, 'index'])->name('invoices.index');
     Route::post('orders/{order}/invoice', [AdminInvoiceController::class, 'store'])->name('invoices.store');
     Route::get('invoices/{invoice}', [AdminInvoiceController::class, 'show'])->name('invoices.show');
@@ -114,9 +108,10 @@ Route::prefix('admin')->name('admin.')->middleware(\App\Http\Middleware\EnsureAd
     Route::resource('stock-adjustments', AdminStockAdjustmentController::class)->only(['index', 'create', 'store']);
     Route::resource('expenses', AdminExpenseController::class)->except(['show']);
     Route::get('reports/profit-loss', [AdminBusinessReportController::class, 'profitLoss'])->name('reports.profit-loss');
+    Route::get('reports/profit-loss/pdf', [AdminBusinessReportController::class, 'profitLossPdf'])->name('reports.profit-loss.pdf');
     Route::get('reports/products', [AdminBusinessReportController::class, 'products'])->name('reports.products');
     Route::get('reports/customers', [AdminBusinessReportController::class, 'customers'])->name('reports.customers');
-    Route::get('reports/suppliers', [AdminBusinessReportController::class, 'suppliers'])->name('reports.suppliers');
+    Route::get('reports/customers/pdf', [AdminBusinessReportController::class, 'customersPdf'])->name('reports.customers.pdf');
     Route::get('reports/{period}', [AdminReportController::class, 'orders'])->whereIn('period', ['day', 'week', 'month', 'year'])->name('reports.orders');
     Route::get('reports/{period}/pdf', [AdminReportController::class, 'ordersPdf'])->whereIn('period', ['day', 'week', 'month', 'year'])->name('reports.orders.pdf');
 });

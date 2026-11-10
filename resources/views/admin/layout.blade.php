@@ -176,19 +176,18 @@
                 <span class="nav-sep"></span>
                 <a href="{{ route('admin.suppliers.index') }}" @class(['active' => request()->routeIs('admin.suppliers.*')])><span class="nav-icon">&#128666;</span>Supplier</a>
                 <a href="{{ route('admin.purchase-orders.index') }}" @class(['active' => request()->routeIs('admin.purchase-orders.*')])><span class="nav-icon">&#128221;</span>Purchase Order</a>
-                <a href="{{ route('admin.bills.index') }}" @class(['active' => request()->routeIs('admin.bills.*')])><span class="nav-icon">&#128179;</span>Bill</a>
                 <span class="nav-sep"></span>
                 <a href="{{ route('admin.customers.index') }}" @class(['active' => request()->routeIs('admin.customers.*')])><span class="nav-icon">&#128101;</span>Customer</a>
                 <a href="{{ route('admin.orders.index') }}" @class(['active' => request()->routeIs('admin.orders.*', 'admin.delivery-zones.*')])><span class="nav-icon">&#129534;</span>Sale Order</a>
                 <a href="{{ route('admin.invoices.index') }}" @class(['active' => request()->routeIs('admin.invoices.*')])><span class="nav-icon">&#128196;</span>Invoice</a>
                 <span class="nav-sep"></span>
-                <a href="{{ route('admin.stock-adjustments.index') }}" @class(['active' => request()->routeIs('admin.stock-adjustments.*')])><span class="nav-icon">&#128451;</span>Stock Adjustment</a>
+                <a href="{{ route('admin.stock-adjustments.index') }}" @class(['active' => request()->routeIs('admin.stock-adjustments.*')])><span class="nav-icon">&#128451;</span>Stock Controller</a>
                 <a href="{{ route('admin.expenses.index') }}" @class(['active' => request()->routeIs('admin.expenses.*')])><span class="nav-icon">&#128184;</span>Expenses</a>
                 <span class="nav-sep"></span>
                 <details class="nav-group" @if(request()->routeIs('admin.reports.*')) open @endif>
                     <summary><span class="nav-icon">&#128200;</span>Report<span class="nav-caret">&#9662;</span></summary>
                     <div class="nav-sub">
-                        @foreach(['profit-loss' => 'Profit & Loss', 'products' => 'Product Revenue', 'customers' => 'Customer', 'suppliers' => 'Supplier'] as $reportRoute => $reportLabel)
+                        @foreach(['profit-loss' => 'Profit & Loss', 'products' => 'Product Revenue', 'customers' => 'Customer'] as $reportRoute => $reportLabel)
                             <a href="{{ route('admin.reports.'.$reportRoute) }}" @class(['active' => request()->routeIs('admin.reports.'.$reportRoute)])>{{ $reportLabel }}</a>
                         @endforeach
                     </div>

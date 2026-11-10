@@ -17,13 +17,6 @@
             @if($purchaseOrder->status === 'ordered')
                 <form action="{{ route('admin.purchase-orders.receive', $purchaseOrder) }}" method="post" onsubmit="return confirm('Receive these goods? This adds them to stock and updates product costs, and can\'t be undone.')">@csrf<button class="btn" type="submit">Receive goods</button></form>
             @endif
-            @if($purchaseOrder->status === 'received')
-                @if($purchaseOrder->bill)
-                    <a class="btn" href="{{ route('admin.bills.show', $purchaseOrder->bill) }}">Open bill</a>
-                @else
-                    <form action="{{ route('admin.purchase-orders.bill', $purchaseOrder) }}" method="post">@csrf<button class="btn" type="submit">Create bill</button></form>
-                @endif
-            @endif
             @if(in_array($purchaseOrder->status, ['draft', 'ordered'], true))
                 <form action="{{ route('admin.purchase-orders.cancel', $purchaseOrder) }}" method="post" onsubmit="return confirm('Cancel this purchase order?')">@csrf<button class="btn secondary" type="submit">Cancel order</button></form>
             @endif

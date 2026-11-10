@@ -19,6 +19,10 @@ class Order extends Model
             if ($order->wasChanged(['status', 'payment_status'])) {
                 app(OrderStock::class)->sync($order);
             }
+
+            if ($order->wasChanged('payment_status') && $order->payment_status === 'paid' && $order->status !== 'cancelled') {
+                Invoice::issueFor($order);
+            }
         });
     }
 
@@ -85,7 +89,7 @@ class Order extends Model
     {
         return match ($this->status) {
             'pending' => match (true) {
-                $this->payment_status === 'paid' => "Payment received. We'll start preparing your order soon.",
+                $this->payment_status === 'paid' => 'Payment received. Your order is waiting for delivery.',
                 $this->payment_status === 'failed' => "Your payment didn't go through. Please call 012 220 152 for help.",
                 $this->payment_status === 'refunded' => 'Your payment was refunded.',
                 $this->payment_method === 'cash_on_delivery' => "We got your order and will confirm it soon. You'll pay on delivery.",
@@ -95,7 +99,7 @@ class Order extends Model
             'shipped' => 'Your order is on the way.',
             'completed' => $this->payment_status === 'refunded'
                 ? 'Your payment for this order was refunded.'
-                : 'Your order is finished. Thank you for shopping with us!',
+                : 'You have received your product. Thank you for shopping with us!',
             'cancelled' => $this->payment_status === 'refunded'
                 ? 'This order was cancelled and your payment refunded.'
                 : 'This order was cancelled.',

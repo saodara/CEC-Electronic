@@ -80,6 +80,51 @@ class AuthControllerTest extends TestCase
         $this->assertAuthenticated();
     }
 
+    public function test_register_page_defaults_to_phnom_penh_and_links_to_the_postcode_finder(): void
+    {
+        $this->get(route('customer.register'))
+            ->assertOk()
+            ->assertSee('name="city"', false)
+            ->assertSee('value="Phnom Penh"', false)
+            ->assertSee('name="postal_code"', false)
+            ->assertSee('href="https://dev.cambodiapost.com.kh/postcode"', false);
+    }
+
+    private function registrationData(array $overrides = []): array
+    {
+        return $overrides + [
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+            'phone' => '012 345 678',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ];
+    }
+
+    public function test_registration_saves_city_and_postal_code(): void
+    {
+        $this->post(route('customer.register.store'), $this->registrationData(['city' => 'Siem Reap', 'postal_code' => '171201']))
+            ->assertRedirect(route('account.dashboard'));
+
+        $this->assertDatabaseHas('users', ['email' => 'jane@example.com', 'city' => 'Siem Reap', 'postal_code' => '171201']);
+    }
+
+    public function test_registration_uses_phnom_penh_and_allows_no_postal_code(): void
+    {
+        $this->post(route('customer.register.store'), $this->registrationData(['city' => '', 'postal_code' => '']))
+            ->assertRedirect(route('account.dashboard'));
+
+        $this->assertDatabaseHas('users', ['email' => 'jane@example.com', 'city' => 'Phnom Penh', 'postal_code' => null]);
+    }
+
+    public function test_registration_rejects_an_invalid_postal_code(): void
+    {
+        $this->post(route('customer.register.store'), $this->registrationData(['postal_code' => 'abc']))
+            ->assertSessionHasErrors('postal_code');
+
+        $this->assertDatabaseMissing('users', ['email' => 'jane@example.com']);
+    }
+
     public function test_registration_fails_without_required_fields(): void
     {
         $this->post(route('customer.register.store'), [])

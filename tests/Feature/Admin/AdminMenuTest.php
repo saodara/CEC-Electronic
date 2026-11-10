@@ -24,10 +24,10 @@ class AdminMenuTest extends TestCase
 
         $this->assertSame([
             'Dashboard', 'Product', 'Category',
-            'Supplier', 'Purchase Order', 'Bill',
+            'Supplier', 'Purchase Order',
             'Customer', 'Sale Order', 'Invoice',
-            'Stock Adjustment', 'Expenses',
-            'Report', 'Profit & Loss', 'Product Revenue', 'Customer', 'Supplier',
+            'Stock Controller', 'Expenses',
+            'Report', 'Profit & Loss', 'Product Revenue', 'Customer',
         ], $items);
         $this->assertStringContainsString('<span class="nav-label">System</span>', $nav);
         $this->assertSame(4, substr_count($nav, 'nav-sep'));
@@ -43,7 +43,6 @@ class AdminMenuTest extends TestCase
             route('admin.categories.index'),
             route('admin.suppliers.index'),
             route('admin.purchase-orders.index'),
-            route('admin.bills.index'),
             route('admin.customers.index'),
             route('admin.orders.index'),
             route('admin.invoices.index'),
@@ -52,7 +51,6 @@ class AdminMenuTest extends TestCase
             route('admin.reports.profit-loss'),
             route('admin.reports.products'),
             route('admin.reports.customers'),
-            route('admin.reports.suppliers'),
         ];
 
         $menu = $this->get(route('admin.dashboard'))->assertOk();
@@ -70,7 +68,7 @@ class AdminMenuTest extends TestCase
         $this->get(route('admin.products.index'))->assertOk()->assertSee('href="'.route('admin.brands.index').'"', false);
         $this->get(route('admin.orders.index'))->assertOk()->assertSee('href="'.route('admin.delivery-zones.index').'"', false);
 
-        foreach (['profit-loss', 'products', 'customers', 'suppliers'] as $report) {
+        foreach (['profit-loss', 'products', 'customers'] as $report) {
             $page = $this->get(route('admin.reports.'.$report))->assertOk();
 
             foreach (['day', 'week', 'month', 'year'] as $period) {

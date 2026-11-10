@@ -15,7 +15,11 @@ class InvoiceController extends Controller
 {
     public function index(): View
     {
-        $invoices = Invoice::query()->with('order')->latest()->paginate(10);
+        $invoices = Invoice::query()
+            ->with('order')
+            ->whereHas('order', fn ($order) => $order->where('payment_status', 'paid'))
+            ->latest()
+            ->paginate(10);
 
         return view('admin.invoices.index', compact('invoices'));
     }
@@ -26,10 +30,7 @@ class InvoiceController extends Controller
             return back()->withErrors(['invoice' => 'A cancelled order cannot have an invoice.']);
         }
 
-        $invoice = Invoice::query()->firstOrCreate(['order_id' => $order->id], [
-            'invoice_number' => $this->invoiceNumber(),
-            'issued_on' => now(config('app.shop_timezone'))->toDateString(),
-        ]);
+        $invoice = Invoice::issueFor($order);
 
         return redirect()->route('admin.invoices.show', $invoice)->with('status', 'Invoice ready.');
     }
@@ -50,14 +51,5 @@ class InvoiceController extends Controller
         return $request->boolean('view')
             ? $pdf->stream($invoice->invoice_number.'.pdf')
             : $pdf->download($invoice->invoice_number.'.pdf');
-    }
-
-    private function invoiceNumber(): string
-    {
-        do {
-            $number = 'INV-'.now(config('app.shop_timezone'))->format('Ymd').'-'.random_int(1000, 9999);
-        } while (Invoice::query()->where('invoice_number', $number)->exists());
-
-        return $number;
     }
 }

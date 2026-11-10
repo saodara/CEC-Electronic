@@ -7,7 +7,7 @@
     <div class="toolbar">
         <div>
             <h2 style="margin:0">Customer invoices</h2>
-            <p class="muted" style="margin:6px 0 0">Create an invoice from any sale order, using the Create invoice button on that order.</p>
+            <p class="muted" style="margin:6px 0 0">Invoices for customers who have paid. Each one is created automatically when the payment is confirmed.</p>
         </div>
     </div>
 
@@ -26,7 +26,7 @@
                         <td><div class="actions"><a class="btn secondary" href="{{ route('admin.invoices.show', $invoice) }}">Open</a></div></td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">No invoices yet.</td></tr>
+                    <tr><td colspan="7" class="muted">No invoices for paid orders yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -33,7 +33,7 @@
             @if($isPaid)
                 <a class="btn secondary" href="{{ route('admin.orders.receipt', $order) }}" download>Receipt</a>
             @endif
-            <a class="btn secondary" href="{{ route('admin.bills.index', ['tab' => 'customers']) }}">Back</a>
+            <a class="btn secondary" href="{{ route('admin.invoices.index') }}">Back</a>
         </div>
     </div>
 

@@ -70,10 +70,15 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'string', 'max:20', 'regex:/^\+?[0-9][0-9\s\-]{6,18}$/'],
+            'city' => ['nullable', 'string', 'max:100'],
+            'postal_code' => ['nullable', 'regex:/^[0-9]{5,6}$/'],
             'password' => ['required', 'confirmed', Password::min(8)],
+        ], [
+            'postal_code.regex' => 'Postal code must be 5 or 6 digits.',
         ]);
 
         $data['phone'] = preg_replace('/[\s\-]/', '', $data['phone']);
+        $data['city'] ??= 'Phnom Penh';
 
         $sessionId = $request->session()->getId();
 

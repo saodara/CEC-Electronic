@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Bill;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
@@ -17,7 +16,7 @@ class PurchaseOrderController extends Controller
     public function index(): View
     {
         $purchaseOrders = PurchaseOrder::query()
-            ->with(['supplier', 'bill'])
+            ->with('supplier')
             ->withCount('items')
             ->latest()
             ->paginate(10);
@@ -49,7 +48,7 @@ class PurchaseOrderController extends Controller
 
     public function show(PurchaseOrder $purchaseOrder): View
     {
-        $purchaseOrder->load(['supplier', 'items.product', 'bill']);
+        $purchaseOrder->load(['supplier', 'items.product']);
 
         return view('admin.purchase-orders.show', compact('purchaseOrder'));
     }
@@ -129,24 +128,6 @@ class PurchaseOrderController extends Controller
         return $received
             ? redirect()->route('admin.purchase-orders.show', $purchaseOrder)->with('status', 'Goods received. Stock and product costs were updated.')
             : $this->rejected($purchaseOrder, 'Only ordered purchase orders can be received.');
-    }
-
-    public function createBill(PurchaseOrder $purchaseOrder): RedirectResponse
-    {
-        if ($purchaseOrder->status !== 'received') {
-            return $this->rejected($purchaseOrder, 'A bill can be created after the goods are received.');
-        }
-
-        $bill = Bill::query()->firstOrCreate(['purchase_order_id' => $purchaseOrder->id], [
-            'bill_number' => $this->uniqueNumber('BILL', 'bill_number', Bill::class),
-            'supplier_id' => $purchaseOrder->supplier_id,
-            'bill_date' => $this->today(),
-            'due_date' => now(config('app.shop_timezone'))->addDays(30)->toDateString(),
-            'total' => $purchaseOrder->grand_total,
-            'status' => 'unpaid',
-        ]);
-
-        return redirect()->route('admin.bills.show', $bill)->with('status', 'Bill ready.');
     }
 
     private function changeStatus(PurchaseOrder $purchaseOrder, array $from, string $to, string $message): RedirectResponse

@@ -2,9 +2,6 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Models\Bill;
-use App\Models\Order;
-use App\Models\User;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
@@ -25,13 +22,22 @@ class PurchasingFlowTest extends TestCase
         return PurchaseOrder::latest('id')->firstOrFail();
     }
 
+    public function test_bill_page_is_gone_from_admin(): void
+    {
+        $this->actingAsAdmin();
+        $order = $this->draft(Product::factory()->create());
+
+        $this->get('/admin/bills')->assertNotFound();
+        $this->post('/admin/purchase-orders/'.$order->id.'/bill')->assertNotFound();
+        $this->get(route('admin.purchase-orders.show', $order))->assertOk()->assertDontSee('Create bill');
+    }
+
     public function test_guest_cannot_open_purchase_pages(): void
     {
         $this->get(route('admin.purchase-orders.index'))->assertRedirect(route('admin.login'));
-        $this->get(route('admin.bills.index'))->assertRedirect(route('admin.login'));
     }
 
-    public function test_full_flow_from_draft_to_paid_bill(): void
+    public function test_full_flow_from_draft_to_received_goods(): void
     {
         $this->actingAsAdmin();
         $product = Product::factory()->create(['stock_quantity' => 3, 'cost_price' => 8]);
@@ -52,148 +58,6 @@ class PurchasingFlowTest extends TestCase
         $this->assertSame('received', $order->fresh()->status);
         $this->assertNotNull($order->fresh()->received_date);
 
-        $this->post(route('admin.purchase-orders.bill', $order))->assertRedirect();
-        $bill = Bill::firstOrFail();
-        $this->assertSame('52.50', $bill->total);
-        $this->assertSame('unpaid', $bill->status);
-        $this->get(route('admin.bills.show', $bill))->assertOk();
-        $this->get(route('admin.bills.index'))->assertOk()->assertSee('$52.50');
-
-        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06'])->assertSessionHasNoErrors();
-        $this->assertSame('paid', $bill->fresh()->status);
-    }
-
-    private function billFor(int $quantity = 5, float $unitCost = 10.5): Bill
-    {
-        $order = $this->draft(Product::factory()->create(['name' => 'Huawei AP371']), $quantity, $unitCost);
-        $this->post(route('admin.purchase-orders.order', $order))->assertSessionHasNoErrors();
-        $this->post(route('admin.purchase-orders.receive', $order))->assertSessionHasNoErrors();
-        $this->post(route('admin.purchase-orders.bill', $order))->assertRedirect();
-
-        return Bill::latest('id')->firstOrFail();
-    }
-
-    public function test_paid_bill_has_a_receipt_to_download(): void
-    {
-        $this->actingAsAdmin();
-        $bill = $this->billFor();
-        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06'])->assertSessionHasNoErrors();
-
-        $receiptUrl = route('admin.bills.receipt', $bill);
-        $this->get(route('admin.bills.show', $bill))->assertSee($receiptUrl);
-        $this->get(route('admin.bills.index'))->assertSee($receiptUrl);
-
-        $pdf = $this->get($receiptUrl)->assertOk()->assertDownload('Receipt-'.$bill->bill_number.'.pdf');
-        $this->assertStringStartsWith('%PDF', $pdf->getContent());
-
-        $bill->refresh()->load(['supplier', 'purchaseOrder.items.product']);
-        $html = view('admin.bills.receipt', compact('bill'))->render();
-        foreach (['PAYMENT RECEIPT', $bill->bill_number, e($bill->supplier->name), '06 Nov 2026', 'Huawei AP371', '$52.50'] as $text) {
-            $this->assertStringContainsString($text, $html);
-        }
-    }
-
-    public function test_unpaid_bill_has_no_receipt(): void
-    {
-        $this->actingAsAdmin();
-        $bill = $this->billFor();
-        $receiptUrl = route('admin.bills.receipt', $bill);
-
-        $this->get(route('admin.bills.show', $bill))->assertDontSee($receiptUrl);
-        $this->get(route('admin.bills.index'))->assertDontSee($receiptUrl);
-        $this->get($receiptUrl)->assertRedirect(route('admin.bills.show', $bill))->assertSessionHasErrors('bill');
-
-        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06']);
-        $this->post(route('admin.bills.unpay', $bill));
-        $this->get($receiptUrl)->assertRedirect(route('admin.bills.show', $bill));
-    }
-
-    public function test_customer_bills_tab_shows_what_each_customer_bought(): void
-    {
-        $this->actingAsAdmin();
-        $order = Order::factory()->create(['customer_name' => 'Sok Dara', 'customer_phone' => '012345678', 'payment_status' => 'paid', 'grand_total' => 11]);
-        $order->items()->create(['product_name' => 'Huawei AP371', 'quantity' => 1, 'unit_price' => 1, 'line_total' => 1]);
-        $order->items()->create(['product_name' => 'Wireless Mouse', 'quantity' => 2, 'unit_price' => 5, 'line_total' => 10]);
-        Order::factory()->create(['customer_name' => 'Cancelled Customer', 'status' => 'cancelled']);
-
-        $this->get(route('admin.bills.index', ['tab' => 'customers']))
-            ->assertOk()
-            ->assertSee('Customer bills')
-            ->assertSee('Sok Dara')
-            ->assertSee('012345678')
-            ->assertSee('Huawei AP371')
-            ->assertSee('Wireless Mouse')
-            ->assertSee('2 @ $5.00 = $10.00', false)
-            ->assertSee('$11.00')
-            ->assertSee('Paid')
-            ->assertSee(route('admin.orders.receipt', $order))
-            ->assertDontSee('Cancelled Customer')
-            ->assertDontSee('Unpaid: $');
-
-        $this->get(route('admin.orders.receipt', $order))->assertOk();
-        $this->get(route('admin.bills.index'))->assertOk()->assertSee('Unpaid: $')->assertDontSee('Sok Dara');
-    }
-
-    public function test_customer_bills_tab_shows_totals_for_each_customer(): void
-    {
-        $this->actingAsAdmin();
-        $buyer = User::factory()->create();
-        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'payment_status' => 'paid', 'grand_total' => 100]);
-        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'payment_status' => 'paid', 'grand_total' => 50.5]);
-        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'payment_status' => 'unpaid', 'grand_total' => 20]);
-        Order::factory()->create(['user_id' => $buyer->id, 'customer_name' => 'Chan Vanna', 'status' => 'cancelled', 'payment_status' => 'paid', 'grand_total' => 999]);
-        Order::factory()->create(['user_id' => null, 'customer_name' => 'Guest Buyer', 'customer_phone' => '099111222', 'payment_status' => 'paid', 'grand_total' => 30]);
-
-        $this->get(route('admin.bills.index', ['tab' => 'customers']))
-            ->assertOk()
-            ->assertSee('Total paid: $180.50', false)
-            ->assertSee('Waiting for payment: $20.00', false)
-            ->assertSee('Customer total spent: <strong>$150.50</strong>', false)
-            ->assertSee('Customer total spent: <strong>$30.00</strong>', false);
-    }
-
-    public function test_customer_bills_can_be_searched_and_filtered(): void
-    {
-        $this->actingAsAdmin();
-        Order::factory()->create(['customer_name' => 'Sok Dara', 'customer_phone' => '012345678', 'payment_status' => 'paid', 'created_at' => '2026-10-05 05:00:00']);
-        Order::factory()->create(['customer_name' => 'Keo Lina', 'customer_phone' => '098765432', 'payment_status' => 'unpaid', 'created_at' => '2026-11-05 05:00:00']);
-
-        $url = fn (array $query) => route('admin.bills.index', ['tab' => 'customers'] + $query);
-
-        $this->get($url(['q' => 'sok']))->assertOk()->assertSee('Sok Dara')->assertDontSee('Keo Lina');
-        $this->get($url(['q' => '0987']))->assertSee('Keo Lina')->assertDontSee('Sok Dara');
-        $this->get($url(['payment' => 'unpaid']))->assertSee('Keo Lina')->assertDontSee('Sok Dara');
-        $this->get($url(['from' => '2026-11-01', 'to' => '2026-11-30']))->assertSee('Keo Lina')->assertDontSee('Sok Dara');
-        $this->get($url(['q' => 'nobody']))->assertSee('No customer bills match this filter.');
-        $this->get($url(['from' => 'not-a-date']))->assertOk()->assertSee('Sok Dara')->assertSee('Keo Lina');
-    }
-
-    public function test_unpaid_customer_bill_offers_an_invoice_but_no_receipt(): void
-    {
-        $this->actingAsAdmin();
-        $order = Order::factory()->create(['customer_name' => 'Keo Lina', 'payment_status' => 'unpaid', 'grand_total' => 40]);
-
-        $this->get(route('admin.bills.index', ['tab' => 'customers']))
-            ->assertSee('Make invoice')
-            ->assertSee(route('admin.invoices.store', $order))
-            ->assertDontSee(route('admin.orders.receipt', $order));
-
-        $this->post(route('admin.invoices.store', $order))->assertRedirect();
-        $invoice = $order->fresh()->invoice;
-
-        $this->get(route('admin.bills.index', ['tab' => 'customers']))
-            ->assertSee(route('admin.invoices.show', $invoice))
-            ->assertDontSee('Make invoice');
-    }
-
-    public function test_guest_cannot_download_a_receipt(): void
-    {
-        $this->actingAsAdmin();
-        $bill = $this->billFor();
-        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06']);
-        auth()->logout();
-
-        $this->get(route('admin.bills.receipt', $bill))->assertRedirect(route('admin.login'));
     }
 
     public function test_receiving_twice_only_adds_stock_once(): void
@@ -258,41 +122,6 @@ class PurchasingFlowTest extends TestCase
         ])->assertSessionHasErrors(['items.0.product_id', 'items.0.quantity', 'items.0.unit_cost']);
 
         $this->assertSame(0, PurchaseOrder::count());
-    }
-
-    public function test_bill_needs_received_goods_and_each_order_gets_one(): void
-    {
-        $this->actingAsAdmin();
-        $order = $this->draft(Product::factory()->create());
-
-        $this->post(route('admin.purchase-orders.bill', $order))->assertSessionHasErrors('purchase_order');
-        $this->assertSame(0, Bill::count());
-
-        $this->post(route('admin.purchase-orders.order', $order));
-        $this->post(route('admin.purchase-orders.receive', $order));
-        $this->post(route('admin.purchase-orders.bill', $order));
-        $this->post(route('admin.purchase-orders.bill', $order));
-
-        $this->assertSame(1, Bill::count());
-    }
-
-    public function test_paid_bill_cannot_be_deleted_until_marked_unpaid(): void
-    {
-        $this->actingAsAdmin();
-        $order = $this->draft(Product::factory()->create());
-        $this->post(route('admin.purchase-orders.order', $order));
-        $this->post(route('admin.purchase-orders.receive', $order));
-        $this->post(route('admin.purchase-orders.bill', $order));
-        $bill = Bill::firstOrFail();
-        $this->post(route('admin.bills.pay', $bill), ['paid_on' => '2026-11-06']);
-
-        $this->delete(route('admin.bills.destroy', $bill))->assertSessionHasErrors('bill');
-        $this->assertNotNull($bill->fresh());
-
-        $this->post(route('admin.bills.unpay', $bill));
-        $this->assertNull($bill->fresh()->paid_on);
-        $this->delete(route('admin.bills.destroy', $bill))->assertSessionHasNoErrors();
-        $this->assertNull($bill->fresh());
     }
 
     public function test_supplier_with_purchase_orders_cannot_be_deleted(): void

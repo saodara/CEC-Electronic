@@ -40,6 +40,19 @@ class OrderManagementTest extends TestCase
             ->assertViewHas('paymentNotificationsCount');
     }
 
+    public function test_order_index_only_lists_orders_with_completed_payment(): void
+    {
+        $this->actingAsAdmin();
+        $paid = Order::factory()->create(['payment_status' => 'paid']);
+        Order::factory()->create(['payment_status' => 'unpaid']);
+        Order::factory()->create(['payment_status' => 'failed']);
+        Order::factory()->create(['payment_status' => 'refunded']);
+
+        $this->get(route('admin.orders.index'))
+            ->assertOk()
+            ->assertViewHas('orders', fn ($orders) => $orders->total() === 1 && $orders->first()->is($paid));
+    }
+
     public function test_admin_can_view_an_order(): void
     {
         $this->actingAsAdmin();

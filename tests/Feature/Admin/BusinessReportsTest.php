@@ -2,14 +2,12 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Models\Bill;
 use App\Models\Expense;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\PurchaseOrder;
-use App\Models\Supplier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\View;
 use Tests\TestCase;
 
 class BusinessReportsTest extends TestCase
@@ -47,7 +45,7 @@ class BusinessReportsTest extends TestCase
     {
         auth()->logout();
 
-        foreach (['profit-loss', 'products', 'customers', 'suppliers'] as $report) {
+        foreach (['profit-loss', 'products', 'customers'] as $report) {
             $this->get(route('admin.reports.'.$report))->assertRedirect(route('admin.login'));
         }
     }
@@ -142,39 +140,181 @@ class BusinessReportsTest extends TestCase
             ->assertSee('2 customers, 3 orders, $650.00');
     }
 
-    public function test_supplier_report_splits_paid_and_unpaid_bills(): void
+    public function test_profit_and_loss_offers_a_pdf_for_each_date_range(): void
     {
-        $supplier = Supplier::factory()->create(['name' => 'Acme']);
-        $received = fn (float $total, string $date) => PurchaseOrder::create([
-            'po_number' => 'PO-'.$total, 'supplier_id' => $supplier->id, 'status' => 'received',
-            'subtotal' => $total, 'grand_total' => $total, 'received_date' => $date,
-        ]);
-        $bill = fn (PurchaseOrder $order, string $status, string $date) => Bill::create([
-            'bill_number' => 'B-'.$order->id, 'supplier_id' => $supplier->id, 'purchase_order_id' => $order->id,
-            'bill_date' => $date, 'due_date' => $date, 'total' => $order->grand_total, 'status' => $status,
-        ]);
+        $page = $this->get(route('admin.reports.profit-loss'))->assertOk()->assertSee('Export PDF');
 
-        $bill($received(100, '2026-11-02'), 'paid', '2026-11-02');
-        $bill($received(40, '2026-11-03'), 'unpaid', '2026-11-03');
-        $bill($received(999, '2026-10-03'), 'unpaid', '2026-10-03');
-        $bill($received(7, '2026-11-15'), 'paid', '2026-11-15');
+        foreach ([
+            'Today' => ['2026-11-15', '2026-11-15'],
+            'Last 7 days' => ['2026-11-09', '2026-11-15'],
+            'This month' => ['2026-11-01', '2026-11-15'],
+            'Last year' => ['2025-01-01', '2025-12-31'],
+            'This year' => ['2026-01-01', '2026-11-15'],
+        ] as $label => [$from, $to]) {
+            $page->assertSee($label)->assertSee("reports/profit-loss/pdf?from={$from}&amp;to={$to}", false);
 
-        $this->get(route('admin.reports.suppliers'))
+            $download = $this->get(route('admin.reports.profit-loss.pdf', ['from' => $from, 'to' => $to]))
+                ->assertOk()
+                ->assertDownload("profit-loss-{$from}-to-{$to}.pdf");
+            $this->assertStringStartsWith('%PDF', $download->getContent());
+        }
+
+        $this->get(route('admin.reports.products'))->assertOk()->assertDontSee('Export PDF');
+    }
+
+    public function test_profit_and_loss_pdf_uses_the_chosen_dates_and_real_records(): void
+    {
+        $this->sale(['subtotal' => 200, 'shipping_total' => 5, 'grand_total' => 205], [['unit_price' => 200, 'line_total' => 200, 'unit_cost' => 50]], '2025-06-10 05:00:00');
+        $this->sale(['subtotal' => 900, 'grand_total' => 900], [['unit_price' => 900, 'line_total' => 900, 'unit_cost' => 1]]);
+        Expense::create(['title' => 'Rent', 'category' => 'Rent', 'amount' => 30, 'spent_on' => '2025-06-01']);
+        Expense::create(['title' => '[DEMO] Ads', 'category' => 'Marketing', 'amount' => 70, 'spent_on' => '2025-06-01']);
+
+        $data = null;
+        View::composer('admin.reports.business.profit-loss-pdf', function ($view) use (&$data) {
+            $data = $view->getData();
+        });
+
+        $this->get(route('admin.reports.profit-loss.pdf', ['from' => '2025-01-01', 'to' => '2025-12-31']))->assertOk();
+        $html = view('admin.reports.business.profit-loss-pdf', $data)->render();
+
+        $this->assertSame(125.0, $data['netProfit']);
+        $this->assertStringContainsString('1 Jan 2025 to 31 Dec 2025', $html);
+        $this->assertStringContainsString('Net profit', $html);
+        $this->assertStringContainsString('$125.00', $html);
+        $this->assertStringContainsString('Rent', $html);
+        $this->assertStringNotContainsString('Marketing', $html);
+    }
+
+    public function test_profit_and_loss_lists_the_products_sold_on_the_page_and_pdf(): void
+    {
+        $this->sale(['subtotal' => 50, 'grand_total' => 50], [['product_name' => 'Mouse', 'quantity' => 5, 'unit_price' => 10, 'unit_cost' => 6, 'line_total' => 50]]);
+        $this->sale(['subtotal' => 300, 'grand_total' => 300], [['product_name' => 'Monitor', 'quantity' => 2, 'unit_price' => 150, 'unit_cost' => null, 'line_total' => 300]]);
+        $this->sale(['subtotal' => 900, 'grand_total' => 900, 'payment_status' => 'unpaid'], [['product_name' => 'Unpaid Laptop', 'unit_price' => 900, 'line_total' => 900, 'unit_cost' => 1]]);
+
+        $expected = ['Products sold', 'Monitor', '2', '$300.00', 'No cost price set', 'Mouse', '5', '$50.00', '$30.00', '$20.00'];
+
+        $this->get(route('admin.reports.profit-loss'))
             ->assertOk()
-            ->assertViewHas('rows', function ($rows) {
-                $row = $rows->firstWhere('name', 'Acme');
+            ->assertSeeInOrder($expected)
+            ->assertDontSee('Unpaid Laptop');
 
-                return (int) $row->received_count === 3
-                    && (float) $row->received_total === 147.0
-                    && (float) $row->billed_total === 147.0
-                    && (float) $row->paid_total === 107.0
-                    && (float) $row->unpaid_total === 40.0;
-            });
+        $data = null;
+        View::composer('admin.reports.business.profit-loss-pdf', function ($view) use (&$data) {
+            $data = $view->getData();
+        });
+        $this->get(route('admin.reports.profit-loss.pdf'))->assertOk();
+        $html = view('admin.reports.business.profit-loss-pdf', $data)->render();
+
+        $position = 0;
+        foreach ($expected as $text) {
+            $found = strpos($html, $text, $position);
+            $this->assertNotFalse($found, "PDF is missing {$text}");
+            $position = $found;
+        }
+        $this->assertStringNotContainsString('Unpaid Laptop', $html);
+    }
+
+    private function pdfHtml(string $view, array $query): string
+    {
+        $data = null;
+        View::composer($view, function ($composed) use (&$data) {
+            $data = $composed->getData();
+        });
+        $this->get(route('admin.reports.customers.pdf', $query))->assertOk();
+
+        return view($view, $data)->render();
+    }
+
+    private function customerSales(): void
+    {
+        $this->sale(['order_number' => 'SOK-1', 'grand_total' => 100, 'customer_phone' => '011 22', 'customer_name' => 'Sok'], [
+            ['product_name' => 'Mouse', 'quantity' => 2, 'unit_price' => 50, 'line_total' => 100],
+        ]);
+        $this->sale(['order_number' => 'SOK-OLD', 'grand_total' => 40, 'customer_phone' => '011 22', 'customer_name' => 'Sok'], [
+            ['product_name' => 'Old Cable', 'unit_price' => 40, 'line_total' => 40],
+        ], '2026-06-10 05:00:00');
+        $this->sale(['order_number' => 'SOK-UNPAID', 'grand_total' => 70, 'customer_phone' => '011 22', 'customer_name' => 'Sok', 'payment_status' => 'unpaid'], []);
+        $this->sale(['order_number' => 'DARA-1', 'grand_total' => 500, 'customer_phone' => '022', 'customer_name' => 'Dara'], [
+            ['product_name' => 'Monitor', 'unit_price' => 500, 'line_total' => 500],
+        ]);
+    }
+
+    public function test_customer_report_exports_the_whole_list_for_each_date_range(): void
+    {
+        $this->customerSales();
+
+        $this->get(route('admin.reports.customers'))
+            ->assertOk()
+            ->assertSee('Export PDF')
+            ->assertSee('reports/customers/pdf?from=2025-01-01&amp;to=2025-12-31', false);
+
+        $download = $this->get(route('admin.reports.customers.pdf', ['from' => '2026-11-01', 'to' => '2026-11-15']))
+            ->assertOk()
+            ->assertDownload('customers-2026-11-01-to-2026-11-15.pdf');
+        $this->assertStringStartsWith('%PDF', $download->getContent());
+
+        $html = $this->pdfHtml('admin.reports.business.customers-pdf', ['from' => '2026-11-01', 'to' => '2026-11-15']);
+
+        $this->assertLessThan(strpos($html, 'Sok'), strpos($html, 'Dara'));
+        $this->assertStringContainsString('$500.00', $html);
+        $this->assertStringContainsString('$100.00', $html);
+        $this->assertStringNotContainsString('$140.00', $html);
+    }
+
+    public function test_each_customer_can_be_exported_on_their_own(): void
+    {
+        $this->customerSales();
+        $query = ['phone' => '011 22', 'from' => '2026-11-01', 'to' => '2026-11-15'];
+
+        $this->get(route('admin.reports.customers', ['from' => '2026-11-01', 'to' => '2026-11-15']))
+            ->assertOk()
+            ->assertSee(e(route('admin.reports.customers.pdf', $query)), false);
+
+        $download = $this->get(route('admin.reports.customers.pdf', $query))
+            ->assertOk()
+            ->assertDownload('customer-011-22-2026-11-01-to-2026-11-15.pdf');
+        $this->assertStringStartsWith('%PDF', $download->getContent());
+
+        $html = $this->pdfHtml('admin.reports.business.customer-pdf', $query);
+
+        foreach (['Sok', '011 22', 'SOK-1', 'Mouse', '$100.00', '1 Nov 2026 to 15 Nov 2026'] as $text) {
+            $this->assertStringContainsString($text, $html);
+        }
+        foreach (['SOK-OLD', 'SOK-UNPAID', 'Dara', 'Monitor'] as $text) {
+            $this->assertStringNotContainsString($text, $html);
+        }
+    }
+
+    public function test_supplier_report_is_gone_from_reports(): void
+    {
+        $this->get('/admin/reports/suppliers')->assertNotFound();
+
+        $this->get(route('admin.reports.profit-loss'))
+            ->assertOk()
+            ->assertDontSee('/admin/reports/suppliers', false);
+    }
+
+    public function test_reports_leave_out_sample_records(): void
+    {
+        Expense::create(['title' => '[DEMO] Shop rent', 'category' => 'Rent', 'amount' => 120, 'spent_on' => '2026-11-01']);
+        Expense::create(['title' => 'Real rent', 'category' => 'Rent', 'amount' => 30, 'spent_on' => '2026-11-01']);
+
+        $this->get(route('admin.reports.profit-loss'))->assertViewHas('expenseTotal', 30.0);
+    }
+
+    public function test_reports_offer_quick_date_ranges(): void
+    {
+        foreach (['profit-loss', 'products', 'customers'] as $report) {
+            $this->get(route('admin.reports.'.$report))
+                ->assertOk()
+                ->assertSee('Last month')
+                ->assertSee('from=2026-10-01&amp;to=2026-10-31', false);
+        }
     }
 
     public function test_reports_render_with_no_data(): void
     {
-        foreach (['profit-loss', 'products', 'customers', 'suppliers'] as $report) {
+        foreach (['profit-loss', 'products', 'customers'] as $report) {
             $this->get(route('admin.reports.'.$report))->assertOk();
         }
     }

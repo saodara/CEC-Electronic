@@ -82,7 +82,7 @@ class AccountControllerTest extends TestCase
             ],
             'pending paid' => [
                 ['status' => 'pending', 'payment_status' => 'paid'],
-                "Payment received. We'll start preparing your order soon.",
+                'Payment received. Your order is waiting for delivery.',
             ],
             'pending payment failed' => [
                 ['status' => 'pending', 'payment_status' => 'failed'],
@@ -90,7 +90,7 @@ class AccountControllerTest extends TestCase
             ],
             'processing' => [['status' => 'processing'], "We're preparing your order."],
             'shipped' => [['status' => 'shipped'], 'Your order is on the way.'],
-            'completed' => [['status' => 'completed'], 'Your order is finished. Thank you for shopping with us!'],
+            'completed' => [['status' => 'completed'], 'You have received your product. Thank you for shopping with us!'],
             'cancelled' => [['status' => 'cancelled'], 'This order was cancelled.'],
             'refunded overrides status' => [
                 ['status' => 'cancelled', 'payment_status' => 'refunded'],
@@ -104,7 +104,7 @@ class AccountControllerTest extends TestCase
     {
         $user = User::factory()->create();
         $order = Order::factory()->create(['user_id' => $user->id, 'status' => 'completed']);
-        $meaning = 'Your order is finished. Thank you for shopping with us!';
+        $meaning = 'You have received your product. Thank you for shopping with us!';
 
         $this->actingAs($user)->get(route('account.dashboard'))->assertSee($meaning);
         $this->actingAs($user)->get(route('account.orders'))->assertSee($meaning);

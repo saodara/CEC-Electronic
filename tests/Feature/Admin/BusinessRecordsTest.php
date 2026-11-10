@@ -17,7 +17,7 @@ class BusinessRecordsTest extends TestCase
     public function test_invoice_is_created_once_from_a_sale_order_and_downloads(): void
     {
         $this->actingAsAdmin();
-        $order = Order::factory()->create(['status' => 'pending', 'grand_total' => 75]);
+        $order = Order::factory()->create(['status' => 'pending', 'payment_status' => 'paid', 'grand_total' => 75]);
 
         $this->get(route('admin.orders.show', $order))->assertSee('Create invoice');
 
@@ -32,6 +32,70 @@ class BusinessRecordsTest extends TestCase
 
         $pdf = $this->get(route('admin.invoices.pdf', $invoice))->assertOk()->assertDownload($invoice->invoice_number.'.pdf');
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
+    }
+
+    public function test_invoice_index_only_lists_invoices_for_paid_orders(): void
+    {
+        $this->actingAsAdmin();
+        $paid = Invoice::create([
+            'invoice_number' => 'INV-PAID',
+            'order_id' => Order::factory()->create(['payment_status' => 'paid'])->id,
+            'issued_on' => now()->toDateString(),
+        ]);
+
+        foreach (['unpaid', 'failed', 'refunded'] as $status) {
+            Invoice::create([
+                'invoice_number' => 'INV-'.strtoupper($status),
+                'order_id' => Order::factory()->create(['payment_status' => $status])->id,
+                'issued_on' => now()->toDateString(),
+            ]);
+        }
+
+        $this->get(route('admin.invoices.index'))
+            ->assertOk()
+            ->assertViewHas('invoices', fn ($invoices) => $invoices->total() === 1 && $invoices->first()->is($paid));
+    }
+
+    public function test_paying_an_order_issues_its_invoice_once(): void
+    {
+        $this->actingAsAdmin();
+        $order = Order::factory()->create(['status' => 'pending', 'payment_status' => 'unpaid']);
+        $this->assertSame(0, Invoice::count());
+
+        $order->update(['payment_status' => 'paid', 'payment_confirmed_at' => now()]);
+        $invoice = Invoice::where('order_id', $order->id)->firstOrFail();
+
+        $order->update(['payment_status' => 'unpaid']);
+        $order->update(['payment_status' => 'paid']);
+        $this->assertSame(1, Invoice::count());
+
+        $this->get(route('admin.invoices.index'))->assertOk()->assertSee($invoice->invoice_number);
+    }
+
+    public function test_paying_a_cancelled_order_does_not_issue_an_invoice(): void
+    {
+        $order = Order::factory()->create(['status' => 'cancelled', 'payment_status' => 'unpaid']);
+
+        $order->update(['payment_status' => 'paid']);
+
+        $this->assertSame(0, Invoice::count());
+    }
+
+    public function test_backfill_issues_invoices_only_for_paid_orders_missing_one(): void
+    {
+        $paid = Order::factory()->create(['status' => 'completed', 'payment_status' => 'paid', 'payment_confirmed_at' => '2026-11-01 12:00:00']);
+        $existing = Order::factory()->create(['status' => 'pending', 'payment_status' => 'paid']);
+        $kept = Invoice::create(['invoice_number' => 'INV-KEPT', 'order_id' => $existing->id, 'issued_on' => '2026-10-01']);
+        Order::factory()->create(['status' => 'pending', 'payment_status' => 'unpaid']);
+        Order::factory()->create(['status' => 'cancelled', 'payment_status' => 'paid']);
+
+        $migration = require database_path('migrations/2026_11_10_000001_issue_invoices_for_paid_orders.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(2, Invoice::count());
+        $this->assertSame('2026-11-01', Invoice::where('order_id', $paid->id)->firstOrFail()->issued_on->toDateString());
+        $this->assertSame('INV-KEPT', $kept->fresh()->invoice_number);
     }
 
     public function test_invoice_shows_ship_to_discount_and_balance_due(): void

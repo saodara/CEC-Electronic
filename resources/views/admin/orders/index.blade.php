@@ -7,7 +7,7 @@
     <div class="toolbar">
         <div>
             <h2 style="margin:0">Sale order management</h2>
-            <p class="muted" style="margin:6px 0 0">Review customer orders, payment state, and fulfillment progress.</p>
+            <p class="muted" style="margin:6px 0 0">Review orders with completed payment and their fulfillment progress.</p>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             @if($paymentNotificationsCount > 0)
@@ -66,7 +66,7 @@
                         <td><div class="actions"><a class="btn secondary" href="{{ route('admin.orders.show', $order) }}">Open</a></div></td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">No orders yet.</td></tr>
+                    <tr><td colspan="7" class="muted">No orders with completed payment yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

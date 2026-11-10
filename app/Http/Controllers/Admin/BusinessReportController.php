@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\Supplier;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class BusinessReportController extends Controller
@@ -24,6 +26,21 @@ class BusinessReportController extends Controller
     {
         [$from, $to] = $this->range($request);
 
+        return view('admin.reports.business.profit-loss', $this->profitLossData($from, $to));
+    }
+
+    public function profitLossPdf(Request $request): Response
+    {
+        [$from, $to] = $this->range($request);
+
+        return Pdf::loadView('admin.reports.business.profit-loss-pdf', [
+            ...$this->profitLossData($from, $to),
+            'generatedAt' => CarbonImmutable::now(config('app.shop_timezone')),
+        ])->setPaper('a4')->download('profit-loss-'.$from->toDateString().'-to-'.$to->toDateString().'.pdf');
+    }
+
+    private function profitLossData(CarbonImmutable $from, CarbonImmutable $to): array
+    {
         $sales = $this->paidOrders($from, $to)
             ->selectRaw('COALESCE(SUM(subtotal - discount_total), 0) as revenue, COALESCE(SUM(shipping_total), 0) as shipping')
             ->toBase()
@@ -36,6 +53,7 @@ class BusinessReportController extends Controller
             ->first();
 
         $expenses = $this->onDates(Expense::query(), 'spent_on', $from, $to)
+            ->where('title', 'not like', '[DEMO]%')
             ->selectRaw('category, SUM(amount) as total')
             ->groupBy('category')
             ->orderByDesc('total')
@@ -48,7 +66,7 @@ class BusinessReportController extends Controller
         $expenseTotal = (float) $expenses->sum('total');
         $grossProfit = $revenue + $shipping - $cost;
 
-        return view('admin.reports.business.profit-loss', [
+        return [
             'from' => $from,
             'to' => $to,
             'revenue' => $revenue,
@@ -59,24 +77,15 @@ class BusinessReportController extends Controller
             'expenseTotal' => $expenseTotal,
             'netProfit' => $grossProfit - $expenseTotal,
             'missingCost' => (int) $items->missing_cost,
-        ]);
+            'soldProducts' => $this->productRows($from, $to)->get(),
+        ];
     }
 
     public function products(Request $request): View
     {
         [$from, $to] = $this->range($request);
 
-        $rows = $this->soldItems($from, $to)
-            ->select('order_items.product_id', 'order_items.product_name')
-            ->selectRaw('SUM(order_items.quantity) as quantity_sold')
-            ->selectRaw('SUM(order_items.line_total) as revenue')
-            ->selectRaw('SUM('.self::ITEM_COST_SQL.') as cost')
-            ->selectRaw('SUM(CASE WHEN order_items.unit_cost IS NULL AND products.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost')
-            ->groupBy('order_items.product_id', 'order_items.product_name')
-            ->orderByDesc('revenue')
-            ->orderBy('order_items.product_name')
-            ->paginate(20)
-            ->withQueryString();
+        $rows = $this->productRows($from, $to)->paginate(20)->withQueryString();
 
         $totals = $this->soldItems($from, $to)
             ->selectRaw('COALESCE(SUM(order_items.quantity), 0) as quantity_sold, COALESCE(SUM(order_items.line_total), 0) as revenue')
@@ -90,39 +99,57 @@ class BusinessReportController extends Controller
     {
         [$from, $to] = $this->range($request);
 
-        $rows = $this->paidOrders($from, $to)
-            ->select('customer_phone')
-            ->selectRaw('MAX(customer_name) as customer_name, MAX(customer_email) as customer_email')
-            ->selectRaw('COUNT(*) as orders_count, SUM(grand_total) as total_spent, MAX(created_at) as last_order_at')
-            ->groupBy('customer_phone')
-            ->orderByDesc('total_spent')
-            ->paginate(20)
-            ->withQueryString();
-
-        $totals = $this->paidOrders($from, $to)
-            ->selectRaw('COUNT(DISTINCT customer_phone) as customers, COUNT(*) as orders_count, COALESCE(SUM(grand_total), 0) as total_spent')
-            ->toBase()
-            ->first();
+        $rows = $this->customerRows($from, $to)->paginate(20)->withQueryString();
+        $totals = $this->customerTotals($from, $to);
 
         return view('admin.reports.business.customers', compact('from', 'to', 'rows', 'totals'));
     }
 
-    public function suppliers(Request $request): View
+    /**
+     * The whole customer list, or one customer's orders when a phone number is given.
+     */
+    public function customersPdf(Request $request): Response
     {
         [$from, $to] = $this->range($request);
-        $received = fn ($query) => $this->onDates($query, 'received_date', $from, $to)->where('status', 'received');
-        $billed = fn ($query) => $this->onDates($query, 'bill_date', $from, $to);
+        $phone = $request->query('phone');
+        $period = $from->toDateString().'-to-'.$to->toDateString();
+        $generatedAt = CarbonImmutable::now(config('app.shop_timezone'));
+        $timezone = config('app.shop_timezone');
 
-        $rows = Supplier::query()
-            ->withCount(['purchaseOrders as received_count' => $received])
-            ->withSum(['purchaseOrders as received_total' => $received], 'grand_total')
-            ->withSum(['bills as billed_total' => $billed], 'total')
-            ->withSum(['bills as paid_total' => fn ($query) => $billed($query)->where('status', 'paid')], 'total')
-            ->withSum(['bills as unpaid_total' => fn ($query) => $billed($query)->where('status', 'unpaid')], 'total')
-            ->orderBy('name')
-            ->get();
+        if (is_string($phone) && $phone !== '') {
+            $orders = $this->paidOrders($from, $to)->where('customer_phone', $phone)->with('items')->latest()->get();
 
-        return view('admin.reports.business.suppliers', compact('from', 'to', 'rows'));
+            return Pdf::loadView('admin.reports.business.customer-pdf', compact('from', 'to', 'phone', 'orders', 'generatedAt', 'timezone'))
+                ->setPaper('a4')
+                ->download('customer-'.(Str::slug($phone) ?: 'unknown').'-'.$period.'.pdf');
+        }
+
+        return Pdf::loadView('admin.reports.business.customers-pdf', [
+            'from' => $from,
+            'to' => $to,
+            'rows' => $this->customerRows($from, $to)->get(),
+            'totals' => $this->customerTotals($from, $to),
+            'generatedAt' => $generatedAt,
+            'timezone' => $timezone,
+        ])->setPaper('a4')->download('customers-'.$period.'.pdf');
+    }
+
+    private function customerRows(CarbonImmutable $from, CarbonImmutable $to): Builder
+    {
+        return $this->paidOrders($from, $to)
+            ->select('customer_phone')
+            ->selectRaw('MAX(customer_name) as customer_name, MAX(customer_email) as customer_email')
+            ->selectRaw('COUNT(*) as orders_count, SUM(grand_total) as total_spent, MAX(created_at) as last_order_at')
+            ->groupBy('customer_phone')
+            ->orderByDesc('total_spent');
+    }
+
+    private function customerTotals(CarbonImmutable $from, CarbonImmutable $to): object
+    {
+        return $this->paidOrders($from, $to)
+            ->selectRaw('COUNT(DISTINCT customer_phone) as customers, COUNT(*) as orders_count, COALESCE(SUM(grand_total), 0) as total_spent')
+            ->toBase()
+            ->first();
     }
 
     /**
@@ -164,6 +191,22 @@ class BusinessReportController extends Controller
             ->where('status', '!=', 'cancelled')
             ->where('created_at', '>=', $from->utc())
             ->where('created_at', '<', $to->addDay()->utc());
+    }
+
+    /**
+     * One row per product sold, best sellers first.
+     */
+    private function productRows(CarbonImmutable $from, CarbonImmutable $to): Builder
+    {
+        return $this->soldItems($from, $to)
+            ->select('order_items.product_id', 'order_items.product_name')
+            ->selectRaw('SUM(order_items.quantity) as quantity_sold')
+            ->selectRaw('SUM(order_items.line_total) as revenue')
+            ->selectRaw('SUM('.self::ITEM_COST_SQL.') as cost')
+            ->selectRaw('SUM(CASE WHEN order_items.unit_cost IS NULL AND products.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost')
+            ->groupBy('order_items.product_id', 'order_items.product_name')
+            ->orderByDesc('revenue')
+            ->orderBy('order_items.product_name');
     }
 
     private function soldItems(CarbonImmutable $from, CarbonImmutable $to): Builder

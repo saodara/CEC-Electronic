@@ -32,6 +32,17 @@
             </label>
             @error('phone') <div style="color:var(--danger);margin-top:6px">{{ $message }}</div> @enderror
 
+            <label style="display:block;margin-top:14px">City
+                <input name="city" autocomplete="address-level2" value="{{ old('city', 'Phnom Penh') }}" maxlength="100">
+            </label>
+            @error('city') <div style="color:var(--danger);margin-top:6px">{{ $message }}</div> @enderror
+
+            <label style="display:block;margin-top:14px">Postal code (optional)
+                <input name="postal_code" inputmode="numeric" autocomplete="postal-code" value="{{ old('postal_code') }}" maxlength="6">
+            </label>
+            <div style="color:var(--muted);font-size:13px;margin-top:6px">Don't know it? <a style="color:var(--brand);font-weight:700;text-decoration:underline" href="https://dev.cambodiapost.com.kh/postcode" target="_blank" rel="noopener">Find your postal code on Cambodia Post</a></div>
+            @error('postal_code') <div style="color:var(--danger);margin-top:6px">{{ $message }}</div> @enderror
+
             <label style="display:block;margin-top:14px">Password
                 <input name="password" type="password" required>
             </label>
