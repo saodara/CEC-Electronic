@@ -32,6 +32,10 @@ RUN docker-php-ext-configure gd --with-jpeg --with-webp \
 # Upload limits (PHP's default is 2 MB, smaller than many phone photos)
 RUN printf 'upload_max_filesize=8M\npost_max_size=10M\n' > /usr/local/etc/php/conf.d/uploads.ini
 
+# Keep PHP inside the machine's 512 MB. Each worker can use up to 128 MB, so
+# the default of 5 workers could run the whole machine out of memory.
+RUN printf '[www]\npm.max_children=3\nrequest_terminate_timeout=60s\n' > /usr/local/etc/php-fpm.d/zz-workers.conf
+
 # Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
